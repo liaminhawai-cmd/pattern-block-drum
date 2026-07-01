@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pattern Block Drum Machine</title>
+  <meta name="description" content="Grab fraction blocks from the wall and slide them into a sampler sequencer. Rotate block faces for dynamics, subdivide beats." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">◧</div>
+        <div class="brand-text">
+          <h1>Pattern Block <span>Drum Machine</span></h1>
+          <p class="tag">Grab fraction blocks · slide them into the sequencer</p>
+        </div>
+      </div>
+
+      <div class="transport">
+        <button id="play" class="btn btn-play" title="Play / Stop (Space)">
+          <span class="play-glyph">▶</span><span class="play-label">Play</span>
+        </button>
+
+        <label class="ctl">
+          <span class="ctl-label">Tempo</span>
+          <input id="bpm" type="range" min="40" max="200" step="1" value="96" />
+          <output id="bpmOut">96</output><span class="unit">bpm</span>
+        </label>
+
+        <label class="ctl">
+          <span class="ctl-label">Master</span>
+          <input id="master" type="range" min="0" max="1" step="0.01" value="0.9" />
+        </label>
+      </div>
+
+      <div class="tools">
+        <button id="randomize" class="btn" title="Randomize a pattern">Randomize</button>
+        <button id="clear" class="btn" title="Empty every lane">Clear</button>
+        <button id="save" class="btn" title="Save to this browser">Save</button>
+        <button id="load" class="btn" title="Load last save">Load</button>
+        <button id="export" class="btn" title="Download pattern as JSON">Export</button>
+        <button id="import" class="btn" title="Import a pattern JSON">Import</button>
+        <button id="help" class="btn btn-ghost" title="How it works">?</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel palette-wrap">
+        <div class="section-head">
+          <span class="section-title">Fraction wall</span>
+          <span class="section-sub">drag a block into a lane below</span>
+        </div>
+        <div id="palette" class="palette" aria-label="Fraction block palette"></div>
+      </section>
+
+      <section class="panel seq-wrap">
+        <div class="section-head">
+          <span class="section-title">Sequencer</span>
+          <span class="section-sub">one bar per lane — blocks tile left to right, a muted block is a rest</span>
+          <button id="addLane" class="btn btn-sm" title="Add an instrument lane">+ Lane</button>
+        </div>
+        <div id="seq" class="seq" aria-label="Sequencer lanes"></div>
+      </section>
+    </main>
+
+    <footer class="legend">
+      <div class="legend-faces">
+        <span class="legend-title">Block faces</span>
+        <span class="face-chip face-mute">mute</span>
+        <span class="face-chip face-soft">soft</span>
+        <span class="face-chip face-mid">mid</span>
+        <span class="face-chip face-loud">loud</span>
+      </div>
+      <div class="legend-hint">
+        Click a block to rotate its face · Right-click (or hover + <kbd>2</kbd>–<kbd>6</kbd>) to subdivide ·
+        <kbd>M</kbd> merge with next · <kbd>Del</kbd> remove · drag an audio file onto a lane to load a sample
+      </div>
+    </footer>
+  </div>
+
+  <div id="ctxmenu" class="ctxmenu" hidden></div>
+  <div id="toast" class="toast" hidden></div>
+
+  <div id="helpModal" class="modal" hidden>
+    <div class="modal-card">
+      <button class="modal-close" data-close>×</button>
+      <h2>How the Pattern Block Drum Machine works</h2>
+      <p>The <strong>fraction wall</strong> at the top is your bin of wooden blocks. Every block is a slice of one
+        bar: a whole <em>1</em>, a <em>1/2</em>, a <em>1/3</em>, all the way to <em>1/12</em>.</p>
+      <ul>
+        <li><strong>Build a rhythm</strong> — drag a block from the wall into a lane. Blocks tile from the left,
+          and a block's width <em>is</em> its length in time.</li>
+        <li><strong>Rotate the faces</strong> — click a placed block to turn it to its next face:
+          <em>loud → mid → soft → mute</em>. That sets how hard it hits. A <em>muted</em> block still holds its
+          time — so it works as a <em>rest</em>.</li>
+        <li><strong>Subdivide a beat</strong> — right-click a block (or hover and press <kbd>2</kbd>–<kbd>6</kbd>).
+          Cut a <em>1/5</em> into 3 and you get three <em>1/15</em> pieces. Press <kbd>M</kbd> to merge a block back
+          into the one after it.</li>
+        <li><strong>Bring your own sounds</strong> — each lane has its own sampler. Drag an audio file onto a lane,
+          or click 📁. It ships with built-in drum voices so it plays right away.</li>
+        <li><strong>Mix</strong> — <em>M</em> mutes a lane, <em>S</em> solos it, the slider sets its level.</li>
+      </ul>
+      <p class="modal-foot">Everything runs locally in your browser with the Web Audio API. Nothing is uploaded.</p>
+    </div>
+  </div>
+
+  <input id="fileInput" type="file" accept="audio/*" hidden />
+  <input id="jsonInput" type="file" accept="application/json,.json" hidden />
+
+  <script src="app.js"></script>
+</body>
+</html>
