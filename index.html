@@ -33,6 +33,12 @@
           <span class="ctl-label">Master</span>
           <input id="master" type="range" min="0" max="1" step="0.01" value="0.9" />
         </label>
+
+        <div class="ctl">
+          <span class="ctl-label">MIDI out</span>
+          <button id="midiToggle" class="btn btn-sm" title="Send MIDI notes on channel 10 (velocity from the block face)">Off</button>
+          <select id="midiPort" class="midi-port" title="MIDI output device" hidden></select>
+        </div>
       </div>
 
       <div class="tools">
@@ -50,7 +56,8 @@
       <section class="panel palette-wrap">
         <div class="section-head">
           <span class="section-title">Fraction wall</span>
-          <span class="section-sub">drag a block into a lane below</span>
+          <span class="section-sub">drag a block into a lane — or click to arm it</span>
+          <span id="brushInfo" class="brush-info">Click a block to arm it, or drag</span>
         </div>
         <div id="palette" class="palette" aria-label="Fraction block palette"></div>
       </section>
@@ -95,11 +102,16 @@
         <li><strong>Rotate the faces</strong> — click a placed block to turn it to its next face:
           <em>loud → mid → soft → mute</em>. That sets how hard it hits. A <em>muted</em> block still holds its
           time — so it works as a <em>rest</em>.</li>
+        <li><strong>No dragging needed</strong> — click a block in the wall to <em>arm</em> it, then click a lane to
+          drop a copy. Click the armed block again (or press <kbd>Esc</kbd>) to put the brush down.</li>
         <li><strong>Subdivide a beat</strong> — right-click a block (or hover and press <kbd>2</kbd>–<kbd>6</kbd>).
-          Cut a <em>1/5</em> into 3 and you get three <em>1/15</em> pieces. Press <kbd>M</kbd> to merge a block back
+          Cut a <em>1/5</em> into 3 and you get three <em>1/15</em> pieces. Any new size that isn't on the wall yet
+          gets <em>added as a new row</em>, and the wall reflows to fit. Press <kbd>M</kbd> to merge a block back
           into the one after it.</li>
         <li><strong>Bring your own sounds</strong> — each lane has its own sampler. Drag an audio file onto a lane,
           or click 📁. It ships with built-in drum voices so it plays right away.</li>
+        <li><strong>MIDI out</strong> — flip <em>MIDI out</em> to On and pick a device. Each lane sends its own note
+          on channel 10 (edit the little number by the lane name); the block face sets velocity.</li>
         <li><strong>Mix</strong> — <em>M</em> mutes a lane, <em>S</em> solos it, the slider sets its level.</li>
       </ul>
       <p class="modal-foot">Everything runs locally in your browser with the Web Audio API. Nothing is uploaded.</p>

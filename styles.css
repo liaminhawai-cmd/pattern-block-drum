@@ -95,10 +95,11 @@ input[type=range]::-moz-range-thumb {
 .section-sub { font-size: 11px; color: var(--muted); }
 
 /* ---------- Palette (fraction wall) ---------- */
-.palette { display: flex; flex-direction: column; gap: 4px; }
-.prow { display: grid; gap: 4px; height: 26px; }
+/* fixed height so added rows (e.g. 1/15) reflow to fit instead of growing forever */
+.palette { display: flex; flex-direction: column; gap: 4px; height: 336px; }
+.prow { display: grid; gap: 4px; flex: 1 1 0; min-height: 15px; }
 .pblock {
-  display: grid; place-items: center; border-radius: 6px; cursor: grab;
+  display: grid; place-items: center; border-radius: 6px; cursor: pointer;
   color: #fff; font-weight: 800; font-size: 11px; font-variant-numeric: tabular-nums;
   background: var(--c);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.14), 0 1px 2px rgba(0,0,0,.3);
@@ -106,9 +107,17 @@ input[type=range]::-moz-range-thumb {
   transition: transform .06s, filter .1s; min-width: 0; overflow: hidden;
 }
 .pblock:hover { filter: brightness(1.12); }
-.pblock:active { cursor: grabbing; transform: scale(.97); }
+.pblock:active { transform: scale(.97); }
 .pblock.dragging { opacity: .5; }
+.pblock.armed { box-shadow: inset 0 0 0 2px #fff, 0 0 12px rgba(255,255,255,.55); filter: brightness(1.15); }
 .pblock sup, .pblock sub { font-size: .72em; }
+
+.brush-info { margin-left: auto; font-size: 11px; color: var(--accent); }
+.midi-port {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 7px; padding: 4px 6px; font-size: 12px; max-width: 150px;
+}
+#midiToggle.on { background: #2aa257; border-color: #2aa257; color: #06210f; font-weight: 700; }
 
 /* ---------- Sequencer ---------- */
 .seq { position: relative; display: flex; flex-direction: column; gap: 6px; }
@@ -133,6 +142,12 @@ input[type=range]::-moz-range-thumb {
   font-weight: 600; background: none; border: none; cursor: pointer; text-align: left; padding: 0; font-size: 11px;
 }
 .lane-name:hover { color: var(--accent); }
+.lane-midi {
+  width: 42px; flex: none; background: var(--panel); color: var(--muted);
+  border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; font-size: 10px;
+  font-variant-numeric: tabular-nums; text-align: center;
+}
+.lane-midi:focus { color: var(--text); border-color: var(--accent); outline: none; }
 .gutter-controls { grid-column: 1 / -1; display: flex; align-items: center; gap: 4px; }
 .mini {
   width: 19px; height: 19px; padding: 0; border-radius: 6px; font-size: 10px; line-height: 1;

@@ -11,18 +11,28 @@
    ========================================================================= */
 
 /* ------------------------------ constants ------------------------------ */
-const ROWS = 12;                        // fraction wall rows: 1 .. 1/12
+const ROWS = 12;                        // starting fraction wall rows: 1 .. 1/12
 const EPS = 1e-9;
 const FACES = ['loud', 'mid', 'soft', 'mute'];   // click-rotation order
 const FACE_GAIN = { loud: 1.0, mid: 0.6, soft: 0.3, mute: 0 };
+const FACE_VEL = { loud: 127, mid: 90, soft: 55, mute: 0 };   // MIDI velocity
 const FACE_DOTS = { loud: '•••', mid: '••', soft: '•', mute: '×' };
+
+// General-MIDI drum notes matched to the built-in voices (channel 10).
+const GM_NOTES = [36, 38, 39, 42, 46, 45, 63, 37, 56, 70, 75, 53];
+const MIDI_CH = 9;                      // 0-indexed channel 10 (GM drums)
 
 // Rainbow palette approximating the classic fraction-wall chart (rows 1..12).
 const PALETTE = [
   '#d81b6a', '#e51e5a', '#e23131', '#ef6a2a', '#f68b1f', '#f5a623',
   '#d7c81e', '#3fae4a', '#12a37f', '#18b6c4', '#2f8fd6', '#6a4aa3'
 ];
-const rowColor = (den) => PALETTE[Math.min(den, ROWS) - 1];
+// Colour for a denominator row. 1..12 use the chart palette; new rows created by
+// subdividing (e.g. 15ths) get a generated hue so they stay visually distinct.
+function rowColor(den) {
+  if (den >= 1 && den <= ROWS) return PALETTE[den - 1];
+  return `hsl(${(den * 47) % 360} 62% 55%)`;
+}
 
 /* ------------------------------ fraction math -------------------------- */
 const gcd = (a, b) => (b ? gcd(b, a % b) : a);
@@ -49,6 +59,7 @@ const newLane = (voice, blocks = []) => ({
   gain: 0.85,
   muted: false,
   solo: false,
+  midi: GM_NOTES[voice % VOICES.length],   // MIDI note this lane sends
   blocks,                // [{ n, d, face }]
 });
 
@@ -60,7 +71,23 @@ const state = {
   master: 0.9,
   playing: false,
   lanes: [],
+  denominators: Array.from({ length: ROWS }, (_, i) => i + 1),   // fraction-wall rows
 };
+
+// Add a denominator row to the wall if a unit fraction 1/d isn't there yet.
+function registerFraction(block) {
+  const r = reduce(block.n, block.d);
+  if (r.n !== 1) return false;               // only unit fractions get a wall row
+  if (state.denominators.includes(r.d)) return false;
+  state.denominators.push(r.d);
+  state.denominators.sort((a, b) => a - b);
+  return true;
+}
+function registerAllFractions() {
+  let added = false;
+  for (const lane of state.lanes) for (const b of lane.blocks) added = registerFraction(b) || added;
+  return added;
+}
 
 /* seed a groovy, instructive default kit ------------------------------- */
 function seedDefault() {
@@ -85,6 +112,7 @@ seedDefault();
 /* ------------------------------ audio ---------------------------------- */
 let ctx = null, masterNode = null;
 const voiceBuffers = new Array(VOICES.length).fill(null);
+const activeSources = new Set();        // buffer sources currently sounding
 
 function ensureAudio() {
   if (ctx) return;
@@ -95,6 +123,16 @@ function ensureAudio() {
   renderVoices();
   state.lanes.forEach(ensureLaneNode);
   applyLaneGains();
+}
+
+// Silence everything that is currently playing (fixes long samples ringing on
+// after Stop). Optionally limit to one lane, e.g. when its sample is swapped.
+function stopSources(lane) {
+  for (const entry of [...activeSources]) {
+    if (lane && entry.lane !== lane) continue;
+    try { entry.src.stop(); } catch (_) { /* already stopped */ }
+    activeSources.delete(entry);
+  }
 }
 
 function ensureLaneNode(lane) {
@@ -116,16 +154,77 @@ function applyLaneGains() {
 
 function laneBuffer(lane) { return lane.buffer || voiceBuffers[lane.voice]; }
 
-function trigger(lane, face, when) {
+// Fire a lane's sound (and MIDI, if enabled) at audio-time `when`.
+function fire(lane, face, when) {
+  if (face === 'mute') return;
   const buf = laneBuffer(lane);
-  if (!buf || face === 'mute') return;
-  ensureLaneNode(lane);
-  const src = ctx.createBufferSource();
-  src.buffer = buf;
-  const g = ctx.createGain();
-  g.gain.value = FACE_GAIN[face];
-  src.connect(g).connect(lane.node);
-  src.start(when);
+  if (buf) {
+    ensureLaneNode(lane);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain();
+    g.gain.value = FACE_GAIN[face];
+    src.connect(g).connect(lane.node);
+    const entry = { src, lane };
+    src.onended = () => activeSources.delete(entry);
+    activeSources.add(entry);
+    src.start(when);
+  }
+  midiFire(lane, face, when);
+}
+
+/* ------------------------------ MIDI out ------------------------------- */
+let midiAccess = null, midiOut = null, midiEnabled = false;
+
+function midiFire(lane, face, when) {
+  if (!midiEnabled || !midiOut || face === 'mute') return;
+  const note = lane.midi | 0;
+  const vel = FACE_VEL[face];
+  // Convert audio-clock time to the performance.now() domain Web MIDI expects.
+  const tOn = performance.now() + Math.max(0, (when - ctx.currentTime) * 1000);
+  midiOut.send([0x90 | MIDI_CH, note, vel], tOn);
+  midiOut.send([0x80 | MIDI_CH, note, 0], tOn + 110);   // note-off after a short gate
+}
+
+async function toggleMidi() {
+  if (midiEnabled) { midiEnabled = false; refreshMidiUI(); return; }
+  if (!navigator.requestMIDIAccess) { toast('Web MIDI isn\'t supported in this browser'); return; }
+  try {
+    if (!midiAccess) {
+      midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+      midiAccess.onstatechange = populateMidiPorts;
+    }
+    populateMidiPorts();
+    if (!midiOut) { toast('No MIDI output found — connect a device or virtual port'); return; }
+    midiEnabled = true;
+    refreshMidiUI();
+  } catch (err) {
+    toast('MIDI permission was blocked');
+  }
+}
+
+function populateMidiPorts() {
+  const sel = document.getElementById('midiPort');
+  if (!sel || !midiAccess) return;
+  const outs = [...midiAccess.outputs.values()];
+  sel.innerHTML = '';
+  outs.forEach((o) => { const opt = document.createElement('option'); opt.value = o.id; opt.textContent = o.name; sel.appendChild(opt); });
+  if (outs.length) {
+    if (!midiOut || !outs.some((o) => o.id === midiOut.id)) midiOut = outs[0];
+    sel.value = midiOut.id;
+  } else {
+    midiOut = null;
+  }
+  refreshMidiUI();
+}
+
+function refreshMidiUI() {
+  const btn = document.getElementById('midiToggle');
+  const sel = document.getElementById('midiPort');
+  if (!btn || !sel) return;
+  btn.textContent = midiEnabled ? 'On' : 'Off';
+  btn.classList.toggle('on', midiEnabled);
+  sel.hidden = !(midiAccess && midiAccess.outputs.size);
 }
 
 /* ------------------------------ synth voices --------------------------- */
@@ -276,7 +375,7 @@ function scheduler() {
     const ev = events[nextIndex];
     const t = loopStart + ev.time * loopDur();
     if (t < ctx.currentTime + ahead) {
-      trigger(state.lanes[ev.lane], ev.face, t);
+      fire(state.lanes[ev.lane], ev.face, t);
       scheduleFlash(ev, t);
       nextIndex++;
       if (nextIndex >= events.length) { nextIndex = 0; loopStart += loopDur(); }
@@ -312,6 +411,7 @@ function play() {
 function stop() {
   state.playing = false;
   clearInterval(schedTimer); schedTimer = null;
+  stopSources();                          // cut any sounds still ringing (long samples)
   document.getElementById('play').classList.remove('playing');
   document.querySelector('.play-label').textContent = 'Play';
   document.querySelector('.play-glyph').textContent = '▶';
@@ -342,20 +442,33 @@ const $ = (sel, el = document) => el.querySelector(sel);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 
 let drag = null;   // active drag payload: { kind:'new'|'move', n, d, face, fromLane?, fromIdx? }
+let armed = null;  // "brush": last-clicked palette fraction, click a lane to place it
+
+function setArmed(den) {
+  armed = armed && armed.d === den ? null : { n: 1, d: den };   // click again to disarm
+  updateBrushUI();
+  document.querySelectorAll('.pblock').forEach((b) => b.classList.toggle('armed', armed != null && +b.dataset.d === armed.d));
+}
+function updateBrushUI() {
+  const info = document.getElementById('brushInfo');
+  if (info) info.textContent = armed ? `Brush: ${armed.d === 1 ? '1' : '1/' + armed.d} — click a lane to place` : 'Click a block to arm it, or drag';
+}
 
 function renderPalette() {
   const wrap = document.getElementById('palette');
   wrap.innerHTML = '';
-  for (let den = 1; den <= ROWS; den++) {
+  for (const den of state.denominators) {
     const row = el('div', 'prow');
     row.style.gridTemplateColumns = `repeat(${den}, 1fr)`;
     for (let i = 0; i < den; i++) {
       const b = el('div', 'pblock');
+      if (armed && armed.d === den) b.classList.add('armed');
       b.style.setProperty('--c', rowColor(den));
       b.draggable = true;
       b.dataset.n = 1; b.dataset.d = den;
       b.innerHTML = den === 1 ? '1' : `<span>1&frasl;${den}</span>`;
-      b.title = den === 1 ? 'A whole bar' : `A 1/${den} block — drag me into a lane`;
+      b.title = den === 1 ? 'A whole bar — click to arm, or drag' : `A 1/${den} block — click to arm, or drag into a lane`;
+      b.addEventListener('click', () => setArmed(den));
       b.addEventListener('dragstart', (e) => {
         drag = { kind: 'new', n: 1, d: den, face: 'loud' };
         b.classList.add('dragging');
@@ -367,6 +480,7 @@ function renderPalette() {
     }
     wrap.appendChild(row);
   }
+  updateBrushUI();
 }
 
 function laneSum(lane) { return lane.blocks.reduce((s, b) => s + fval(b), 0); }
@@ -391,7 +505,11 @@ function renderSeq() {
     const name = el('button', 'lane-name'); name.textContent = lane.name;
     name.title = 'Click to change the built-in voice';
     name.addEventListener('click', () => { cycleVoice(lane); });
-    voiceRow.append(dot, name);
+    const midi = el('input', 'lane-midi'); midi.type = 'number'; midi.min = 0; midi.max = 127; midi.value = lane.midi;
+    midi.title = 'MIDI note this lane sends (channel 10)';
+    midi.addEventListener('change', () => { lane.midi = Math.max(0, Math.min(127, +midi.value | 0)); midi.value = lane.midi; });
+    midi.addEventListener('click', (e) => e.stopPropagation());
+    voiceRow.append(dot, name, midi);
 
     const controls = el('div', 'gutter-controls');
     const mBtn = el('button', 'mini' + (lane.muted ? ' on-m' : ''), 'M'); mBtn.title = 'Mute lane';
@@ -420,7 +538,7 @@ function renderSeq() {
     if (sum > 1 + EPS) track.classList.add('full');
 
     if (!lane.blocks.length) {
-      track.appendChild(el('div', 'track-empty', 'drag a fraction block here'));
+      track.appendChild(el('div', 'track-empty', 'drag a block here, or arm one and click'));
     }
 
     lane.blocks.forEach((b, bi) => {
@@ -477,6 +595,14 @@ function renderSeq() {
     // dropping an audio file directly on the track
     track.addEventListener('dragover', (e) => { if (isFileDrag(e)) e.preventDefault(); });
 
+    // click-to-place: with a brush armed, clicking empty track space drops the block
+    track.addEventListener('click', (e) => {
+      if (!armed) return;
+      if (e.target.closest('.block')) return;   // clicking a block rotates its face instead
+      const idx = dropIndexFor(track, e.clientX);
+      if (!insertBlock(li, idx, blk(armed.n, armed.d, 'loud'))) { rejectFlash(track); toast('No room left in the bar'); }
+    });
+
     laneEl.append(gutter, track);
     seq.appendChild(laneEl);
   });
@@ -505,6 +631,8 @@ function subdivide(li, bi, k) {
   const b = lane.blocks[bi];
   const pieces = Array.from({ length: k }, () => blk(b.n, b.d * k, b.face));
   lane.blocks.splice(bi, 1, ...pieces);
+  // a new size like 1/15 may not be on the wall yet — add it and reflow
+  if (registerFraction(pieces[0])) renderPalette();
   markDirty(); renderSeq();
 }
 
@@ -586,9 +714,11 @@ function removeLane(li) {
   markDirty(); applyLaneGains(); renderSeq();
 }
 function cycleVoice(lane) {
+  stopSources(lane);
   lane.voice = (lane.voice + 1) % VOICES.length;
   lane.buffer = null;
   lane.name = VOICES[lane.voice];
+  lane.midi = GM_NOTES[lane.voice];
   renderSeq();
 }
 
@@ -603,6 +733,7 @@ async function decodeInto(lane, file) {
   try {
     const buf = await file.arrayBuffer();
     const audio = await ctx.decodeAudioData(buf);
+    stopSources(lane);                    // cut the old sample if it's still playing
     lane.buffer = audio;
     lane.name = file.name.replace(/\.[^.]+$/, '');
     renderSeq(); toast('Loaded ' + lane.name);
@@ -661,24 +792,31 @@ function toast(msg) {
 const SAVE_KEY = 'pbdm.pattern.v1';
 function serialize() {
   return {
-    bpm: state.bpm, master: state.master,
+    bpm: state.bpm, master: state.master, denominators: state.denominators.slice(),
     lanes: state.lanes.map((l) => ({
-      name: l.name, voice: l.voice, gain: l.gain, muted: l.muted, solo: l.solo,
+      name: l.name, voice: l.voice, gain: l.gain, muted: l.muted, solo: l.solo, midi: l.midi,
       blocks: l.blocks.map((b) => ({ n: b.n, d: b.d, face: b.face })),
     })),
   };
 }
 function deserialize(data) {
   if (!data || !Array.isArray(data.lanes)) return;
+  stopSources();
   state.bpm = data.bpm || 96; state.master = data.master ?? 0.9;
   laneSeq = 0;
   state.lanes = data.lanes.map((l) => {
     const lane = newLane(l.voice || 0, (l.blocks || []).map((b) => blk(b.n, b.d, b.face || 'loud')));
     lane.name = l.name || lane.name; lane.gain = l.gain ?? 0.85; lane.muted = !!l.muted; lane.solo = !!l.solo;
+    if (l.midi != null) lane.midi = l.midi | 0;
     return lane;
   });
+  // restore the wall (default rows + any saved/derived denominators)
+  const base = Array.from({ length: ROWS }, (_, i) => i + 1);
+  const extra = Array.isArray(data.denominators) ? data.denominators : [];
+  state.denominators = [...new Set([...base, ...extra])].sort((a, b) => a - b);
+  registerAllFractions();
   if (ctx) { state.lanes.forEach(ensureLaneNode); applyLaneGains(); }
-  syncControls(); markDirty(); renderSeq();
+  syncControls(); markDirty(); renderPalette(); renderSeq();
 }
 function saveLocal() { localStorage.setItem(SAVE_KEY, JSON.stringify(serialize())); toast('Saved to this browser'); }
 function loadLocal() {
@@ -743,6 +881,11 @@ function wireControls() {
   $('#import').addEventListener('click', () => $('#jsonInput').click());
   $('#help').addEventListener('click', () => ($('#helpModal').hidden = false));
 
+  $('#midiToggle').addEventListener('click', toggleMidi);
+  $('#midiPort').addEventListener('change', (e) => {
+    if (midiAccess) midiOut = midiAccess.outputs.get(e.target.value) || midiOut;
+  });
+
   $('#helpModal').addEventListener('click', (e) => { if (e.target.id === 'helpModal' || e.target.dataset.close != null) $('#helpModal').hidden = true; });
 
   $('#fileInput').addEventListener('change', (e) => {
@@ -759,23 +902,24 @@ function wireControls() {
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, textarea')) return;
     if (e.code === 'Space') { e.preventDefault(); state.playing ? stop() : play(); return; }
+    if (e.key === 'Escape' && armed) { setArmed(armed.d); return; }   // disarm the brush
     if (!hoverTarget) return;
     const { li, bi } = hoverTarget;
     if (!state.lanes[li] || !state.lanes[li].blocks[bi]) return;
     if (e.key >= '2' && e.key <= '6') { subdivide(li, bi, +e.key); }
-    else if (e.key === '1') { /* merge shorthand not used; 1 reserved */ }
     else if (e.key.toLowerCase() === 'm') { mergeWithNext(li, bi); }
     else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteBlock(li, bi); }
-    else if (e.key >= '7' && e.key <= '9') { /* ignore */ }
   });
 }
 
 /* ------------------------------ boot ----------------------------------- */
 function init() {
+  registerAllFractions();     // seed patterns may include sizes (e.g. 1/15) to add to the wall
   renderPalette();
   syncControls();
   renderSeq();
   wireControls();
+  refreshMidiUI();
   requestAnimationFrame(tickPlayhead);
 }
 document.addEventListener('DOMContentLoaded', init);

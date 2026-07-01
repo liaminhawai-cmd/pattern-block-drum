@@ -28,23 +28,32 @@ Everything runs locally in the browser with the Web Audio API. Nothing is upload
 
 ## How to play
 
-- **Build a rhythm** — drag a block from the fraction wall into a lane. Blocks
-  tile from the left; the left-to-right order is the order they play in the bar.
+- **Build a rhythm** — drag a block from the fraction wall into a lane, or
+  **click a block to "arm" it** and then click a lane to drop a copy (no dragging
+  needed). Blocks tile from the left; left-to-right is the order they play. Press
+  <kbd>Esc</kbd> or click the armed block again to put the brush down.
 - **Rotate the faces** — click a placed block to turn it to its next face:
   **loud → mid → soft → mute**. That's the block's dynamic, like rotating a
   physical wooden block to a different face. A **muted** block still holds its
   time, so it doubles as a **rest**.
 - **Subdivide a beat** — right-click a block (or hover it and press
   <kbd>2</kbd>–<kbd>6</kbd>) to cut it into equal pieces. Split a `1/5` into 3
-  and you get three `1/15` pieces — the total length never changes. Press
-  <kbd>M</kbd> to merge a block back into the one after it.
+  and you get three `1/15` pieces — the total length never changes. Any new size
+  that isn't on the wall yet (like `1/15`) is **added as a new row and the wall
+  reflows to fit**. Press <kbd>M</kbd> to merge a block back into the one after it.
 - **Bring your own sounds** — each lane has its own sampler. Drag an audio file
   onto a lane, or click 📁 to load one. Click a lane's name to cycle through the
   12 built-in synth voices instead.
+- **Send MIDI** — flip **MIDI out** to On and choose a device. Each lane sends
+  its own note on channel 10 (the little number by the lane name; defaults follow
+  the General-MIDI drum map) and the block face sets the velocity. Great for
+  driving hardware or a DAW instrument. *(Web MIDI needs an `https://` page — it
+  works on the deployed site, and in Chrome/Edge.)*
 - **Mix** — `M` mutes a lane, `S` solos it, and the slider sets its level. Use
   **+ Lane** to add more instruments.
 - **Transport** — Space (or the Play button) starts/stops. Tempo sets the bar
-  length; one bar = four beats.
+  length; one bar = four beats. Stopping cuts any sound still ringing, so long
+  samples don't keep playing after you hit Stop.
 
 ### Keyboard shortcuts (while hovering a block)
 
@@ -53,6 +62,7 @@ Everything runs locally in the browser with the Web Audio API. Nothing is upload
 | <kbd>2</kbd>–<kbd>6</kbd> | Subdivide into that many pieces |
 | <kbd>M</kbd> | Merge with the next block |
 | <kbd>Del</kbd> / <kbd>Backspace</kbd> | Remove the block |
+| <kbd>Esc</kbd> | Put down the armed brush |
 | <kbd>Space</kbd> | Play / stop |
 
 ## Save & share
