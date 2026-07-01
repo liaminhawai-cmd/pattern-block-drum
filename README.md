@@ -49,6 +49,11 @@ Everything runs locally in the browser with the Web Audio API. Nothing is upload
 - **Bring your own sounds** — each lane has its own sampler. Drag an audio file
   onto a lane, or click 📁 to load one. Click a lane's name to cycle through the
   12 built-in synth voices instead.
+- **Or record one** — click 🎙️ on a lane to record straight from your
+  microphone (up to 12s), with a live level meter while you record. After you
+  stop, drag the two handles on the waveform to trim it, hit **Preview trim** to
+  check it, then **Use this sample** to drop the trimmed clip into that lane.
+  Nothing is uploaded — recording, trimming and playback all stay in the browser.
 - **Send MIDI** — flip **MIDI out** to On and choose a device. Each lane sends
   its own note on channel 10 (the little number by the lane name; defaults follow
   the General-MIDI drum map) and the block face sets the velocity. Great for

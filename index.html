@@ -82,7 +82,8 @@
       </div>
       <div class="legend-hint">
         Click a block to rotate its face · Right-click (or hover + <kbd>2</kbd>–<kbd>6</kbd>) to subdivide ·
-        <kbd>M</kbd> merge with next · <kbd>Del</kbd> remove · drag an audio file onto a lane to load a sample
+        <kbd>M</kbd> merge with next · <kbd>Del</kbd> remove · drag an audio file onto a lane to load a sample,
+        or click 🎙️ to record one
       </div>
     </footer>
   </div>
@@ -110,11 +111,40 @@
           into the one after it.</li>
         <li><strong>Bring your own sounds</strong> — each lane has its own sampler. Drag an audio file onto a lane,
           or click 📁. It ships with built-in drum voices so it plays right away.</li>
+        <li><strong>Record one instead</strong> — click 🎙️ on a lane to record straight from your microphone.
+          Drag the handles on the waveform to trim it, preview the trimmed section, then use it.</li>
         <li><strong>MIDI out</strong> — flip <em>MIDI out</em> to On and pick a device. Each lane sends its own note
           on channel 10 (edit the little number by the lane name); the block face sets velocity.</li>
         <li><strong>Mix</strong> — <em>M</em> mutes a lane, <em>S</em> solos it, the slider sets its level.</li>
       </ul>
       <p class="modal-foot">Everything runs locally in your browser with the Web Audio API. Nothing is uploaded.</p>
+    </div>
+  </div>
+
+  <div id="recModal" class="modal" hidden>
+    <div class="modal-card rec-card">
+      <button class="modal-close" data-close>×</button>
+      <h2>Record a sample<span id="recTarget" class="rec-target"></span></h2>
+
+      <div class="rec-visual">
+        <canvas id="recCanvas" width="640" height="140"></canvas>
+        <div id="recDimLeft" class="rec-dim rec-dim-left"></div>
+        <div id="recDimRight" class="rec-dim rec-dim-right"></div>
+        <div id="recTrimStart" class="rec-handle" hidden></div>
+        <div id="recTrimEnd" class="rec-handle" hidden></div>
+      </div>
+
+      <div class="rec-status-row">
+        <span id="recStatus">Click record and allow microphone access</span>
+        <span id="recTimer" class="rec-timer">0.0s</span>
+      </div>
+
+      <div class="rec-controls">
+        <button id="recToggle" class="btn btn-play">● Record</button>
+        <button id="recPreview" class="btn" disabled>▶ Preview trim</button>
+        <button id="recUse" class="btn btn-use" disabled>Use this sample</button>
+      </div>
+      <p class="modal-foot">Drag the handles to trim. Takes are capped at 12s. Nothing leaves your browser.</p>
     </div>
   </div>
 

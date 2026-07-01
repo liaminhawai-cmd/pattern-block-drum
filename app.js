@@ -528,12 +528,14 @@ function renderSeq() {
     sBtn.addEventListener('click', () => { lane.solo = !lane.solo; applyLaneGains(); renderSeq(); });
     const loadBtn = el('button', 'mini', '📁'); loadBtn.title = 'Load an audio sample';
     loadBtn.addEventListener('click', () => loadSampleFor(lane));
+    const micBtn = el('button', 'mini', '🎙️'); micBtn.title = 'Record a sample from your microphone';
+    micBtn.addEventListener('click', () => openRecorder(lane));
     const vol = el('input', 'lane-vol'); vol.type = 'range'; vol.min = 0; vol.max = 1; vol.step = 0.01; vol.value = lane.gain;
     vol.title = 'Lane level';
     vol.addEventListener('input', () => { lane.gain = +vol.value; applyLaneGains(); });
     const rm = el('button', 'mini rm', '×'); rm.title = 'Remove lane';
     rm.addEventListener('click', () => { removeLane(li); });
-    controls.append(mBtn, sBtn, loadBtn, vol, rm);
+    controls.append(mBtn, sBtn, loadBtn, micBtn, vol, rm);
     gutter.append(voiceRow, controls);
 
     // drag an audio file onto the gutter to load a sample
@@ -774,6 +776,249 @@ function handleFileDrop(e, lane) {
   if (f) decodeInto(lane, f);
 }
 
+/* ------------------------------ recorder -------------------------------- */
+const REC_MAX_SEC = 12;
+let recLane = null;          // lane the finished take will go into
+let recStream = null;        // live MediaStream (kept alive across takes until the modal closes)
+let recorder = null;         // active MediaRecorder
+let recChunks = [];
+let recBuffer = null;        // decoded AudioBuffer of the last take
+let recTrim = { start: 0, end: 1 };
+let recTimerId = null, recStartedAt = 0;
+let recAnalyser = null, recMeterRaf = null;
+let recPreviewSrc = null;
+let recCounter = 0;
+
+function recSupported() {
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+}
+function pickRecMime() {
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg', 'audio/mp4'];
+  for (const c of candidates) if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) return c;
+  return '';
+}
+
+function openRecorder(lane) {
+  if (!recSupported()) { toast('Recording isn\'t supported in this browser'); return; }
+  ensureAudio();
+  recLane = lane;
+  recBuffer = null;
+  recTrim = { start: 0, end: 1 };
+  $('#recTarget').textContent = `→ ${lane.name}`;
+  $('#recStatus').textContent = 'Click record and allow microphone access';
+  $('#recTimer').textContent = '0.0s';
+  $('#recToggle').textContent = '● Record';
+  $('#recToggle').classList.remove('recording');
+  $('#recPreview').disabled = true;
+  $('#recUse').disabled = true;
+  $('#recTrimStart').hidden = true;
+  $('#recTrimEnd').hidden = true;
+  $('#recDimLeft').style.width = '0%';
+  $('#recDimRight').style.width = '0%';
+  clearCanvas();
+  $('#recModal').hidden = false;
+}
+
+function closeRecorder() {
+  if (recorder) {
+    recorder.onstop = null;   // discard this take — the stop event fires async, after
+                               // recorder/recLane below are cleared, so drop the handler
+                               // rather than let it run against torn-down state
+    if (recorder.state === 'recording') recorder.stop();
+  }
+  stopLevelMeter();
+  clearInterval(recTimerId); recTimerId = null;
+  if (recPreviewSrc) { try { recPreviewSrc.stop(); } catch (_) {} recPreviewSrc = null; }
+  if (recStream) { recStream.getTracks().forEach((t) => t.stop()); recStream = null; }
+  recorder = null; recBuffer = null; recLane = null;
+  $('#recModal').hidden = true;
+}
+
+async function toggleRecording() {
+  if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
+
+  if (!recStream) {
+    try {
+      recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      toast('Microphone access was blocked');
+      return;
+    }
+  }
+  recBuffer = null;
+  recChunks = [];
+  const mime = pickRecMime();
+  recorder = new MediaRecorder(recStream, mime ? { mimeType: mime } : undefined);
+  recorder.ondataavailable = (e) => { if (e.data.size) recChunks.push(e.data); };
+  recorder.onstop = onRecordingStop;
+  recorder.start();
+
+  $('#recToggle').textContent = '■ Stop';
+  $('#recToggle').classList.add('recording');
+  $('#recStatus').textContent = 'Recording…';
+  $('#recPreview').disabled = true;
+  $('#recUse').disabled = true;
+  $('#recTrimStart').hidden = true;
+  $('#recTrimEnd').hidden = true;
+
+  recStartedAt = Date.now();
+  clearInterval(recTimerId);
+  recTimerId = setInterval(() => {
+    const elapsed = (Date.now() - recStartedAt) / 1000;
+    $('#recTimer').textContent = elapsed.toFixed(1) + 's';
+    if (elapsed >= REC_MAX_SEC) recorder.stop();
+  }, 100);
+
+  startLevelMeter(recStream);
+}
+
+async function onRecordingStop() {
+  clearInterval(recTimerId); recTimerId = null;
+  stopLevelMeter();
+  $('#recToggle').textContent = '● Record';
+  $('#recToggle').classList.remove('recording');
+
+  const blob = new Blob(recChunks, { type: recorder.mimeType || 'audio/webm' });
+  try {
+    const arr = await blob.arrayBuffer();
+    recBuffer = await ctx.decodeAudioData(arr);
+  } catch (err) {
+    toast('Could not decode the recording — try again');
+    $('#recStatus').textContent = 'Click record and allow microphone access';
+    return;
+  }
+  recTrim = { start: 0, end: 1 };
+  drawWaveform(recBuffer);
+  $('#recTrimStart').hidden = false;
+  $('#recTrimEnd').hidden = false;
+  positionTrimUI();
+  $('#recPreview').disabled = false;
+  $('#recUse').disabled = false;
+}
+
+function clearCanvas() {
+  const canvas = $('#recCanvas');
+  const c2 = canvas.getContext('2d');
+  c2.fillStyle = '#14161d';
+  c2.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function startLevelMeter(stream) {
+  const src = ctx.createMediaStreamSource(stream);
+  recAnalyser = ctx.createAnalyser();
+  recAnalyser.fftSize = 512;
+  src.connect(recAnalyser);   // analysis only — not connected onward, so no monitoring feedback
+  const data = new Uint8Array(recAnalyser.frequencyBinCount);
+  const canvas = $('#recCanvas');
+  const c2 = canvas.getContext('2d');
+  const draw = () => {
+    recAnalyser.getByteTimeDomainData(data);
+    let peak = 0;
+    for (const v of data) peak = Math.max(peak, Math.abs(v - 128));
+    const level = Math.min(1, peak / 110);
+    c2.fillStyle = '#14161d'; c2.fillRect(0, 0, canvas.width, canvas.height);
+    const barW = 80, h = level * canvas.height;
+    const grad = c2.createLinearGradient(0, canvas.height, 0, 0);
+    grad.addColorStop(0, '#37c26a'); grad.addColorStop(0.7, '#ffd166'); grad.addColorStop(1, '#e24a4a');
+    c2.fillStyle = grad;
+    c2.fillRect(canvas.width / 2 - barW / 2, canvas.height - h, barW, h);
+    recMeterRaf = requestAnimationFrame(draw);
+  };
+  draw();
+}
+function stopLevelMeter() {
+  if (recMeterRaf) cancelAnimationFrame(recMeterRaf);
+  recMeterRaf = null; recAnalyser = null;
+}
+
+function drawWaveform(buffer) {
+  const canvas = $('#recCanvas');
+  const c2 = canvas.getContext('2d');
+  const data = buffer.getChannelData(0);
+  const w = canvas.width, h = canvas.height, mid = h / 2;
+  c2.fillStyle = '#14161d'; c2.fillRect(0, 0, w, h);
+  c2.fillStyle = 'rgba(255,255,255,.15)'; c2.fillRect(0, mid, w, 1);
+  const step = Math.max(1, Math.ceil(data.length / w));
+  c2.fillStyle = '#ffd166';
+  for (let x = 0; x < w; x++) {
+    let min = 1, max = -1;
+    const start = x * step;
+    for (let i = 0; i < step; i++) {
+      const v = data[start + i];
+      if (v === undefined) break;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    const y1 = mid + min * mid * 0.9, y2 = mid + max * mid * 0.9;
+    c2.fillRect(x, y1, 1, Math.max(1, y2 - y1));
+  }
+}
+
+function positionTrimUI() {
+  $('#recTrimStart').style.left = (recTrim.start * 100) + '%';
+  $('#recTrimEnd').style.left = (recTrim.end * 100) + '%';
+  $('#recDimLeft').style.width = (recTrim.start * 100) + '%';
+  $('#recDimRight').style.width = ((1 - recTrim.end) * 100) + '%';
+  const dur = recBuffer.duration;
+  $('#recStatus').textContent = `Selected ${((recTrim.end - recTrim.start) * dur).toFixed(2)}s of ${dur.toFixed(2)}s — drag the handles to trim`;
+}
+
+function wireTrimHandle(handleEl, which) {
+  handleEl.addEventListener('pointerdown', (e) => {
+    if (!recBuffer) return;
+    handleEl.setPointerCapture(e.pointerId);
+    const canvas = $('#recCanvas');
+    const move = (ev) => {
+      const r = canvas.getBoundingClientRect();
+      let frac = (ev.clientX - r.left) / r.width;
+      frac = Math.max(0, Math.min(1, frac));
+      const minGap = 0.02;
+      if (which === 'start') recTrim.start = Math.min(frac, recTrim.end - minGap);
+      else recTrim.end = Math.max(frac, recTrim.start + minGap);
+      positionTrimUI();
+    };
+    const up = () => {
+      handleEl.releasePointerCapture(e.pointerId);
+      handleEl.removeEventListener('pointermove', move);
+      handleEl.removeEventListener('pointerup', up);
+    };
+    handleEl.addEventListener('pointermove', move);
+    handleEl.addEventListener('pointerup', up);
+  });
+}
+
+function previewTrim() {
+  if (!recBuffer) return;
+  if (recPreviewSrc) { try { recPreviewSrc.stop(); } catch (_) {} }
+  const startSec = recTrim.start * recBuffer.duration;
+  const durSec = Math.max(0.01, (recTrim.end - recTrim.start) * recBuffer.duration);
+  const src = ctx.createBufferSource();
+  src.buffer = recBuffer;
+  src.connect(masterNode);
+  src.start(0, startSec, durSec);
+  recPreviewSrc = src;
+}
+
+function sliceBuffer(buffer, startFrac, endFrac) {
+  const startSample = Math.floor(startFrac * buffer.length);
+  const endSample = Math.max(startSample + 1, Math.floor(endFrac * buffer.length));
+  const out = ctx.createBuffer(buffer.numberOfChannels, endSample - startSample, buffer.sampleRate);
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    out.getChannelData(ch).set(buffer.getChannelData(ch).subarray(startSample, endSample));
+  }
+  return out;
+}
+
+function useRecording() {
+  if (!recBuffer || !recLane) return;
+  stopSources(recLane);
+  recLane.buffer = sliceBuffer(recBuffer, recTrim.start, recTrim.end);
+  recLane.name = 'Rec ' + ++recCounter;
+  toast('Recorded sample loaded into ' + recLane.name);
+  renderSeq();
+  closeRecorder();
+}
+
 /* ------------------------------ context menu --------------------------- */
 const ctxEl = document.getElementById('ctxmenu');
 let hoverTarget = null;
@@ -914,6 +1159,13 @@ function wireControls() {
 
   $('#helpModal').addEventListener('click', (e) => { if (e.target.id === 'helpModal' || e.target.dataset.close != null) $('#helpModal').hidden = true; });
 
+  $('#recToggle').addEventListener('click', toggleRecording);
+  $('#recPreview').addEventListener('click', previewTrim);
+  $('#recUse').addEventListener('click', useRecording);
+  $('#recModal').addEventListener('click', (e) => { if (e.target.id === 'recModal' || e.target.dataset.close != null) closeRecorder(); });
+  wireTrimHandle($('#recTrimStart'), 'start');
+  wireTrimHandle($('#recTrimEnd'), 'end');
+
   $('#fileInput').addEventListener('change', (e) => {
     const f = e.target.files[0];
     if (f && pendingSampleLane) decodeInto(pendingSampleLane, f);
@@ -927,6 +1179,7 @@ function wireControls() {
 
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, textarea')) return;
+    if (!$('#recModal').hidden) { if (e.key === 'Escape') closeRecorder(); return; }
     if (e.code === 'Space') { e.preventDefault(); state.playing ? stop() : play(); return; }
     if (e.key === 'Escape' && armed) { disarm(); return; }
     if (!hoverTarget) return;
