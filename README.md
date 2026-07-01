@@ -30,17 +30,22 @@ Everything runs locally in the browser with the Web Audio API. Nothing is upload
 
 - **Build a rhythm** — drag a block from the fraction wall into a lane, or
   **click a block to "arm" it** and then click a lane to drop a copy (no dragging
-  needed). Blocks tile from the left; left-to-right is the order they play. Press
-  <kbd>Esc</kbd> or click the armed block again to put the brush down.
+  needed). Blocks tile from the left; left-to-right is the order they play. The
+  brush always follows **whichever block you clicked last** — wall or placed —
+  so you can pick up a shape straight from the sequencer. Press <kbd>Esc</kbd> to
+  put the brush down. An unfinished lane shows a faint dashed ghost over its
+  remaining time (e.g. "3/4 left") so you can see what's left to fill.
 - **Rotate the faces** — click a placed block to turn it to its next face:
   **loud → mid → soft → mute**. That's the block's dynamic, like rotating a
   physical wooden block to a different face. A **muted** block still holds its
   time, so it doubles as a **rest**.
 - **Subdivide a beat** — right-click a block (or hover it and press
   <kbd>2</kbd>–<kbd>6</kbd>) to cut it into equal pieces. Split a `1/5` into 3
-  and you get three `1/15` pieces — the total length never changes. Any new size
-  that isn't on the wall yet (like `1/15`) is **added as a new row and the wall
-  reflows to fit**. Press <kbd>M</kbd> to merge a block back into the one after it.
+  and you get three `1/15` pieces — the total length never changes, and the
+  pieces stay in perfect alignment with the rest of the bar no matter how deep
+  you subdivide. Any new size that isn't on the wall yet (like `1/15`) is
+  **added as a new row and the wall reflows to fit**. Press <kbd>M</kbd> to merge
+  a block back into the one after it.
 - **Bring your own sounds** — each lane has its own sampler. Drag an audio file
   onto a lane, or click 📁 to load one. Click a lane's name to cycle through the
   12 built-in synth voices instead.

@@ -6,6 +6,7 @@
   --text: #eef0f6;
   --muted: #9aa0b4;
   --accent: #ffd166;
+  --track-bg: #12141b;
   font-synthesis: none;
 }
 
@@ -161,10 +162,15 @@ input[type=range]::-moz-range-thumb {
 .lane-vol { flex: 1; min-width: 30px; }
 
 /* Track = drop zone holding tiled blocks */
+/* No flex `gap` here on purpose: gap adds pixels *on top of* each block's
+   percentage width, so splitting a block into more pieces would push the
+   row wider than 100% and drift out of alignment with other lanes. Seams
+   between blocks are drawn as a border instead (see .block.seam), which
+   box-sizing: border-box keeps inside each block's own declared width. */
 .track {
-  position: relative; display: flex; gap: 2px; padding: 3px; border-radius: 9px;
+  position: relative; display: flex; padding: 3px; border-radius: 9px;
   background: repeating-linear-gradient(90deg, #14161d 0 1px, transparent 1px calc(25% )); /* quarter guides */
-  background-color: #12141b; border: 1px solid var(--line); overflow: hidden;
+  background-color: var(--track-bg); border: 1px solid var(--line); overflow: hidden;
 }
 .track.over { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 .track.full { }
@@ -180,6 +186,20 @@ input[type=range]::-moz-range-thumb {
 .block.dragging { opacity: .45; }
 .block .blabel { pointer-events: none; opacity: .9; }
 .block.narrow .blabel { display: none; }
+/* seam between adjacent blocks — a border (inside box-sizing: border-box)
+   rather than a flex gap, so it never adds width beyond the block's own
+   percentage share. See the .track comment for why this matters. */
+.block.seam { border-right: 2px solid var(--track-bg); }
+
+/* faint ghost segment showing the unplaced remainder of an unfinished lane */
+.gap {
+  position: relative; min-width: 0; border-radius: 6px;
+  background: rgba(255,255,255,.03);
+  border: 1px dashed rgba(255,255,255,.1);
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;   /* clicks fall through to the track's own placement handler */
+}
+.gap-label { font-size: 9px; color: rgba(255,255,255,.28); letter-spacing: .3px; white-space: nowrap; }
 
 .block.face-loud { box-shadow: inset 0 0 0 1px rgba(255,255,255,.35), 0 0 12px color-mix(in srgb, var(--c) 55%, transparent); }
 .block.face-mid  { background: color-mix(in srgb, var(--c) 74%, #0b0c11); }

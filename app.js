@@ -43,6 +43,9 @@ function fracLabel(b) {
   if (r.d === 1) return String(r.n);
   return `${r.n}/${r.d}`;
 }
+// Exact rational addition (avoids float drift for the running lane total).
+function addFrac(a, b) { return reduce(a.n * b.d + b.n * a.d, a.d * b.d); }
+function laneSumFrac(lane) { return lane.blocks.reduce((s, b) => addFrac(s, b), { n: 0, d: 1 }); }
 
 /* ------------------------------ state ---------------------------------- */
 // Built-in synth voices (rendered to buffers at startup).
@@ -442,16 +445,23 @@ const $ = (sel, el = document) => el.querySelector(sel);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 
 let drag = null;   // active drag payload: { kind:'new'|'move', n, d, face, fromLane?, fromIdx? }
-let armed = null;  // "brush": last-clicked palette fraction, click a lane to place it
+let armed = null;  // "brush": the last block clicked (wall or placed) — click a lane to place a copy
 
-function setArmed(den) {
-  armed = armed && armed.d === den ? null : { n: 1, d: den };   // click again to disarm
+// Arm the brush to a fraction. Any block click (wall or placed) calls this, so
+// the brush always tracks whatever you last clicked.
+function setArmed(n, d) {
+  armed = { n, d };
   updateBrushUI();
-  document.querySelectorAll('.pblock').forEach((b) => b.classList.toggle('armed', armed != null && +b.dataset.d === armed.d));
+  document.querySelectorAll('.pblock').forEach((b) => b.classList.toggle('armed', armed.n === 1 && +b.dataset.d === armed.d));
+}
+function disarm() {
+  armed = null;
+  updateBrushUI();
+  document.querySelectorAll('.pblock.armed').forEach((b) => b.classList.remove('armed'));
 }
 function updateBrushUI() {
   const info = document.getElementById('brushInfo');
-  if (info) info.textContent = armed ? `Brush: ${armed.d === 1 ? '1' : '1/' + armed.d} — click a lane to place` : 'Click a block to arm it, or drag';
+  if (info) info.textContent = armed ? `Brush: ${fracLabel(armed)} — click a lane to place (Esc to put down)` : 'Click a block to arm it, or drag';
 }
 
 function renderPalette() {
@@ -468,7 +478,7 @@ function renderPalette() {
       b.dataset.n = 1; b.dataset.d = den;
       b.innerHTML = den === 1 ? '1' : `<span>1&frasl;${den}</span>`;
       b.title = den === 1 ? 'A whole bar — click to arm, or drag' : `A 1/${den} block — click to arm, or drag into a lane`;
-      b.addEventListener('click', () => setArmed(den));
+      b.addEventListener('click', () => setArmed(1, den));
       b.addEventListener('dragstart', (e) => {
         drag = { kind: 'new', n: 1, d: den, face: 'loud' };
         b.classList.add('dragging');
@@ -546,6 +556,10 @@ function renderSeq() {
       const w = Math.min(fval(b), 1) * 100;
       blockEl.style.flex = `0 0 ${w}%`;
       blockEl.style.setProperty('--c', rowColor((li % ROWS) + 1));
+      // seam (not flex `gap`) so splitting a block into pieces can't add extra
+      // total width — flex `gap` stacks on top of percentage widths and drifts
+      // the row out of alignment with other lanes as pieces are added.
+      if (bi < lane.blocks.length - 1) blockEl.classList.add('seam');
       blockEl.draggable = true;
       blockEl.dataset.bi = bi;
       if (fval(b) < 0.06) blockEl.classList.add('narrow');
@@ -556,6 +570,8 @@ function renderSeq() {
       blockEl.addEventListener('click', () => {
         if (dragged) { dragged = false; return; }
         rotateFace(lane, bi);
+        const r = reduce(b.n, b.d);
+        setArmed(r.n, r.d);   // last-clicked block (wall or placed) becomes the brush
       });
       blockEl.addEventListener('dragstart', (e) => {
         dragged = true;
@@ -572,9 +588,18 @@ function renderSeq() {
       track.appendChild(blockEl);
     });
 
+    // faint label over the remaining empty time in an unfinished lane
+    const sumFrac = laneSumFrac(lane);
+    if (lane.blocks.length && sumFrac.n < sumFrac.d) {
+      const remain = reduce(sumFrac.d - sumFrac.n, sumFrac.d);
+      const gapEl = el('div', 'gap', `<span class="gap-label">${fracLabel(remain)} left</span>`);
+      gapEl.style.flex = `0 0 ${Math.min(fval(remain), 1) * 100}%`;
+      track.appendChild(gapEl);
+    }
+
     // capacity readout
     const cap = el('div', 'cap');
-    cap.textContent = capacityLabel(sum);
+    cap.textContent = capacityLabel(sumFrac);
     track.appendChild(cap);
 
     // drop handling for the track (new block from palette OR moved block)
@@ -612,11 +637,12 @@ function renderSeq() {
   seq.appendChild(ph);
 }
 
-function capacityLabel(sum) {
-  const r = reduce(Math.round(sum * 720), 720); // 720 = lcm(1..12)/... enough resolution
-  if (Math.abs(sum - 1) < 1e-6) return 'full bar';
-  if (sum > 1) return 'over ' + (r.d === 1 ? r.n : `${r.n}/${r.d}`);
-  return (r.d === 1 ? r.n : `${r.n}/${r.d}`) + ' full';
+// sumFrac is the lane's exact placed total, e.g. { n: 5, d: 8 } for 5/8.
+function capacityLabel(sumFrac) {
+  const { n, d } = sumFrac;
+  if (n === d) return 'full bar';
+  if (n > d) { const r = reduce(n - d, d); return 'over ' + (r.d === 1 ? r.n : `${r.n}/${r.d}`); }
+  return (d === 1 ? n : `${n}/${d}`) + ' full';
 }
 
 /* ------------------------------ block ops ------------------------------ */
@@ -902,7 +928,7 @@ function wireControls() {
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, textarea')) return;
     if (e.code === 'Space') { e.preventDefault(); state.playing ? stop() : play(); return; }
-    if (e.key === 'Escape' && armed) { setArmed(armed.d); return; }   // disarm the brush
+    if (e.key === 'Escape' && armed) { disarm(); return; }
     if (!hoverTarget) return;
     const { li, bi } = hoverTarget;
     if (!state.lanes[li] || !state.lanes[li].blocks[bi]) return;
