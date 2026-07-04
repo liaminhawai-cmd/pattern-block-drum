@@ -8,6 +8,13 @@ Inspired by classroom fraction rods — every block is a slice of one bar
 (`1`, `1/2`, `1/3` … `1/12`), and because a block's **width is its length in
 time**, stacking lanes of different fractions gives you rich polyrhythms.
 
+Colours are built from **prime factorization**, not a fixed palette: each prime
+gets its own strong hue (2 is blue, 3 is red), a prime power intensifies that
+hue as the exponent grows (`9 = 3²` is a deeper "super red"), and a composite
+blends its factors' hues weighted by exponent (`6 = 2×3` is purple; `12 = 2²×3`
+leans further toward blue than `6` does, from that extra factor of 2). A
+block's colour is always the same on the wall and in a lane.
+
 ![fraction wall + sequencer](docs/screenshot.png)
 
 ## Run it

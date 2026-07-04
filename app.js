@@ -22,16 +22,49 @@ const FACE_DOTS = { loud: '•••', mid: '••', soft: '•', mute: '×' };
 const GM_NOTES = [36, 38, 39, 42, 46, 45, 63, 37, 56, 70, 75, 53];
 const MIDI_CH = 9;                      // 0-indexed channel 10 (GM drums)
 
-// Rainbow palette approximating the classic fraction-wall chart (rows 1..12).
-const PALETTE = [
-  '#d81b6a', '#e51e5a', '#e23131', '#ef6a2a', '#f68b1f', '#f5a623',
-  '#d7c81e', '#3fae4a', '#12a37f', '#18b6c4', '#2f8fd6', '#6a4aa3'
-];
-// Colour for a denominator row. 1..12 use the chart palette; new rows created by
-// subdividing (e.g. 15ths) get a generated hue so they stay visually distinct.
-function rowColor(den) {
-  if (den >= 1 && den <= ROWS) return PALETTE[den - 1];
-  return `hsl(${(den * 47) % 360} 62% 55%)`;
+/* ------------------------------ prime-factor colour --------------------- */
+// Every prime gets its own strong hue. A prime power (9 = 3^2) keeps that hue
+// but grows more saturated/darker as the exponent rises ("super red"). A
+// composite of distinct primes (6 = 2*3, 12 = 2^2*3) gets the exponent-weighted
+// circular mean of its prime factors' hues, so 12 leans twice as hard toward
+// blue as 6 does and reads as "blueish purple" next to 6's plain purple.
+const PRIME_HUE = { 2: 214, 3: 356, 5: 42, 7: 150, 11: 320, 13: 185 };
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+function hueForPrime(p) { return PRIME_HUE[p] != null ? PRIME_HUE[p] : (p * 61) % 360; }
+
+function primeFactorize(n) {
+  const factors = new Map();
+  let m = n;
+  for (let p = 2; p * p <= m; p++) {
+    while (m % p === 0) { factors.set(p, (factors.get(p) || 0) + 1); m /= p; }
+  }
+  if (m > 1) factors.set(m, (factors.get(m) || 0) + 1);
+  return factors;
+}
+
+// Colour for a denominator (the fraction wall "row" a block belongs to).
+function denColor(den) {
+  if (den <= 1) return 'hsl(224 12% 42%)';   // the whole bar "1" — no prime factors, neutral
+  const factors = [...primeFactorize(den)];
+  let vx = 0, vy = 0, total = 0;
+  for (const [p, a] of factors) {
+    const hue = hueForPrime(p) * Math.PI / 180;
+    vx += Math.cos(hue) * a; vy += Math.sin(hue) * a; total += a;
+  }
+  let hueDeg = Math.atan2(vy, vx) * 180 / Math.PI;
+  if (hueDeg < 0) hueDeg += 360;
+  let sat, light;
+  if (factors.length === 1) {
+    const exp = factors[0][1];
+    sat = clamp(70 + (exp - 1) * 12, 0, 100);
+    light = clamp(52 - (exp - 1) * 6, 22, 60);
+  } else {
+    const agreement = Math.hypot(vx, vy) / total;   // 1 = factors agree, 0 = they cancel out (opposed hues)
+    sat = clamp(30 + agreement * 55, 15, 90);
+    light = 50;
+  }
+  return `hsl(${hueDeg.toFixed(1)} ${sat.toFixed(0)}% ${light.toFixed(0)}%)`;
 }
 
 /* ------------------------------ fraction math -------------------------- */
@@ -473,7 +506,7 @@ function renderPalette() {
     for (let i = 0; i < den; i++) {
       const b = el('div', 'pblock');
       if (armed && armed.d === den) b.classList.add('armed');
-      b.style.setProperty('--c', rowColor(den));
+      b.style.setProperty('--c', denColor(den));
       b.draggable = true;
       b.dataset.n = 1; b.dataset.d = den;
       b.innerHTML = den === 1 ? '1' : `<span>1&frasl;${den}</span>`;
@@ -511,7 +544,7 @@ function renderSeq() {
     /* gutter -------------------------------------------------------- */
     const gutter = el('div', 'gutter');
     const voiceRow = el('div', 'lane-voice');
-    const dot = el('span', 'voice-dot'); dot.style.setProperty('--c', rowColor((li % ROWS) + 1));
+    const dot = el('span', 'voice-dot');   // a lane marker, not a fraction — stays neutral (see CSS)
     const name = el('button', 'lane-name'); name.textContent = lane.name;
     name.title = 'Click to change the built-in voice';
     name.addEventListener('click', () => { cycleVoice(lane); });
@@ -557,7 +590,7 @@ function renderSeq() {
       const blockEl = el('div', 'block face-' + b.face);
       const w = Math.min(fval(b), 1) * 100;
       blockEl.style.flex = `0 0 ${w}%`;
-      blockEl.style.setProperty('--c', rowColor((li % ROWS) + 1));
+      blockEl.style.setProperty('--c', denColor(reduce(b.n, b.d).d));   // colour follows the block's own fraction, matching the wall
       // seam (not flex `gap`) so splitting a block into pieces can't add extra
       // total width — flex `gap` stacks on top of percentage widths and drifts
       // the row out of alignment with other lanes as pieces are added.
