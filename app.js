@@ -615,7 +615,19 @@ function renderSeq() {
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', fracLabel(b));
       });
-      blockEl.addEventListener('dragend', () => { blockEl.classList.remove('dragging'); setTimeout(() => (dragged = false), 0); });
+      blockEl.addEventListener('dragend', () => {
+        blockEl.classList.remove('dragging');
+        setTimeout(() => (dragged = false), 0);
+        // Any valid track drop (accepted or rejected-for-overflow) already nulls
+        // `drag` inside handleBlockDrop before this fires. If it's still set here,
+        // the block was released somewhere with no drop zone — off the board.
+        if (drag) {
+          drag = null;
+          const label = fracLabel(b);
+          deleteBlock(li, bi);
+          toast(`Removed ${label}`);
+        }
+      });
       blockEl.addEventListener('contextmenu', (e) => { e.preventDefault(); openCtxMenu(e, li, bi); });
       blockEl.addEventListener('mouseenter', () => { hoverTarget = { li, bi }; });
       blockEl.addEventListener('mouseleave', () => { if (hoverTarget && hoverTarget.li === li && hoverTarget.bi === bi) hoverTarget = null; });

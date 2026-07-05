@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pattern Block Drum Machine</title>
   <meta name="description" content="Grab fraction blocks from the wall and slide them into a sampler sequencer. Rotate block faces for dynamics, subdivide beats." />
-  <link rel="stylesheet" href="styles.css?v=6" />
+  <link rel="stylesheet" href="styles.css?v=7" />
 </head>
 <body>
   <div id="app">
@@ -82,8 +82,8 @@
       </div>
       <div class="legend-hint">
         Click a block to rotate its face · Right-click (or hover + <kbd>2</kbd>–<kbd>6</kbd>) to subdivide ·
-        <kbd>M</kbd> merge with next · <kbd>Del</kbd> remove · drag an audio file onto a lane to load a sample,
-        or click 🎙️ to record one
+        <kbd>M</kbd> merge with next · <kbd>Del</kbd> remove · drag a block off the board to delete it ·
+        drag an audio file onto a lane to load a sample, or click 🎙️ to record one
       </div>
     </footer>
   </div>
@@ -110,6 +110,9 @@
           time — so it works as a <em>rest</em>.</li>
         <li><strong>No dragging needed</strong> — click a block in the wall to <em>arm</em> it, then click a lane to
           drop a copy. Click the armed block again (or press <kbd>Esc</kbd>) to put the brush down.</li>
+        <li><strong>Delete by dragging off</strong> — drag a placed block out of the sequencer and drop it anywhere
+          that isn't a lane (the wall, the header, empty space) to remove it. <kbd>Del</kbd> / <kbd>Backspace</kbd>
+          works too while hovering a block.</li>
         <li><strong>Subdivide a beat</strong> — right-click a block (or hover and press <kbd>2</kbd>–<kbd>6</kbd>).
           Cut a <em>1/5</em> into 3 and you get three <em>1/15</em> pieces. Any new size that isn't on the wall yet
           gets <em>added as a new row</em>, and the wall reflows to fit. Press <kbd>M</kbd> to merge a block back
@@ -156,6 +159,6 @@
   <input id="fileInput" type="file" accept="audio/*" hidden />
   <input id="jsonInput" type="file" accept="application/json,.json" hidden />
 
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

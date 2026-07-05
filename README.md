@@ -41,7 +41,9 @@ Everything runs locally in the browser with the Web Audio API. Nothing is upload
   brush always follows **whichever block you clicked last** — wall or placed —
   so you can pick up a shape straight from the sequencer. Press <kbd>Esc</kbd> to
   put the brush down. An unfinished lane shows a faint dashed ghost over its
-  remaining time (e.g. "3/4 left") so you can see what's left to fill.
+  remaining time (e.g. "3/4 left") so you can see what's left to fill. Drag a
+  placed block off the board — onto the wall, the header, anywhere that isn't
+  a lane — and it's deleted.
 - **Rotate the faces** — click a placed block to turn it to its next face:
   **loud → mid → soft → mute**. That's the block's dynamic, like rotating a
   physical wooden block to a different face. A **muted** block still holds its
