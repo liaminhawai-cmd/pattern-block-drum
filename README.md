@@ -74,6 +74,37 @@ Everything runs locally in the browser with the Web Audio API. Nothing is upload
   length; one bar = four beats. Stopping cuts any sound still ringing, so long
   samples don't keep playing after you hit Stop.
 
+## 🎓 Learn mode
+
+![Groove Lab in Learn mode](docs/learn-mode.png)
+
+Switch modes in the header. **Create** is the free-play sampler above, with no
+rules. **Learn** adds two things aimed at teaching the maths behind the groove:
+
+- **Fill the bar to hear it** — a lane stays silent until its blocks add up to
+  exactly one whole bar (a muted block still counts — it's a rest). An
+  unfinished lane is outlined in amber with a hint like "add 3/4 more — silent
+  until this lane is a full bar"; once it adds up, it gets a "✓ complete" badge
+  and joins the mix. This is the fraction-addition lesson: every moment in the
+  bar has to be accounted for, one way or another.
+- **The Groove Lab** — pick any two numbers (or hit **Use my lanes** to pull in
+  two lanes you've actually built) and it live-computes:
+  - their **HCF (GCD)** and **LCD (LCM)**, with a colour-coded prime
+    factorization (the same colours as the wall);
+  - a **funk level**, from 😌 *Locked* (one number is a multiple of the
+    other — no polyrhythm) up to 🤯 *Deep funk*. A 2‑against‑3 polyrhythm
+    needs sixths to draw exactly and lands on "Classic polyrhythm"; a
+    3‑against‑5 needs fifteenths and rates funkier still — the fewer factors
+    two numbers share, the more slices it takes to line them up, and the
+    funkier it sounds;
+  - a plain-English explanation of *why*, worked out from the shared factor
+    (or lack of one);
+  - a **▶ Hear the polyrhythm** button that plays the two numbers as a click
+    pattern so you can hear the relationship, not just read it;
+  - a **🎵 Hear it as a pitch** button — the exact same ratio, played as two
+    sustained tones. If it lands on a recognised just-intonation interval
+    (a perfect fifth, a major third, an octave…) it names it.
+
 ### Keyboard shortcuts (while hovering a block)
 
 | Key | Action |

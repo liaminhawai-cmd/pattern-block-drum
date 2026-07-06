@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pattern Block Drum Machine</title>
   <meta name="description" content="Grab fraction blocks from the wall and slide them into a sampler sequencer. Rotate block faces for dynamics, subdivide beats." />
-  <link rel="stylesheet" href="styles.css?v=7" />
+  <link rel="stylesheet" href="styles.css?v=8" />
 </head>
 <body>
   <div id="app">
@@ -41,6 +41,11 @@
         </div>
       </div>
 
+      <div class="mode-toggle" role="tablist" aria-label="Mode">
+        <button id="modeCreate" class="mode-btn active" data-mode="create" title="Free play — build patterns, no restrictions">🎛️ Create</button>
+        <button id="modeLearn" class="mode-btn" data-mode="learn" title="Guided mode — lanes must add up to a whole bar, plus the Groove Lab">🎓 Learn</button>
+      </div>
+
       <div class="tools">
         <button id="randomize" class="btn" title="Randomize a pattern">Randomize</button>
         <button id="clear" class="btn" title="Empty every lane">Clear</button>
@@ -62,10 +67,45 @@
         <div id="palette" class="palette" aria-label="Fraction block palette"></div>
       </section>
 
+      <section class="panel lab-wrap" id="labPanel" hidden>
+        <div class="section-head">
+          <span class="section-title">🎓 Groove Lab</span>
+          <span class="section-sub">pick two numbers and see how they groove together</span>
+          <button id="labUseLanes" class="btn btn-sm" title="Fill in from two lanes you've built">Use my lanes</button>
+        </div>
+        <div class="lab-body">
+          <div class="lab-inputs">
+            <label>A <input id="labA" type="number" min="1" max="32" value="2" /></label>
+            <span class="lab-vs">against</span>
+            <label>B <input id="labB" type="number" min="1" max="32" value="3" /></label>
+          </div>
+
+          <div class="lab-math">
+            <div id="labFactA" class="lab-fact"></div>
+            <span class="lab-op">×</span>
+            <div id="labFactB" class="lab-fact"></div>
+          </div>
+
+          <div class="lab-results">
+            <div class="lab-stat"><span class="lab-stat-label">HCF (GCD)</span><span id="labGcd" class="lab-stat-val"></span></div>
+            <div class="lab-stat"><span class="lab-stat-label">LCD (LCM)</span><span id="labLcm" class="lab-stat-val"></span></div>
+            <div class="lab-stat"><span class="lab-stat-label">Funk level</span><span id="labFunk" class="lab-stat-val"></span></div>
+          </div>
+
+          <p id="labExplain" class="lab-explain"></p>
+
+          <div class="lab-row">
+            <button id="labPlayGroove" class="btn">▶ Hear the polyrhythm</button>
+            <button id="labPlayTone" class="btn">🎵 Hear it as a pitch</button>
+            <span id="labInterval" class="lab-interval-name"></span>
+          </div>
+        </div>
+      </section>
+
       <section class="panel seq-wrap">
         <div class="section-head">
           <span class="section-title">Sequencer</span>
-          <span class="section-sub">one bar per lane — blocks tile left to right, a muted block is a rest</span>
+          <span id="seqSub" class="section-sub">one bar per lane — blocks tile left to right, a muted block is a rest</span>
           <button id="addLane" class="btn btn-sm" title="Add an instrument lane">+ Lane</button>
         </div>
         <div id="seq" class="seq" aria-label="Sequencer lanes"></div>
@@ -124,6 +164,11 @@
         <li><strong>MIDI out</strong> — flip <em>MIDI out</em> to On and pick a device. Each lane sends its own note
           on channel 10 (edit the little number by the lane name); the block face sets velocity.</li>
         <li><strong>Mix</strong> — <em>M</em> mutes a lane, <em>S</em> solos it, the slider sets its level.</li>
+        <li><strong>🎓 Learn mode</strong> — switch modes up in the header. In <em>Learn</em>, a lane stays silent
+          until its blocks add up to exactly one whole bar (mute blocks count — they're rests), teaching that every
+          moment needs to be accounted for. It also opens the <em>Groove Lab</em>: pick any two numbers to see their
+          HCF and LCM, how "funky" the polyrhythm between them is, hear it as a rhythm, and hear the same ratio as a
+          just-intonation musical interval. <em>Create</em> mode is the free-play sampler with no rules.</li>
       </ul>
       <p class="modal-foot">Everything runs locally in your browser with the Web Audio API. Nothing is uploaded.</p>
     </div>
@@ -159,6 +204,6 @@
   <input id="fileInput" type="file" accept="audio/*" hidden />
   <input id="jsonInput" type="file" accept="application/json,.json" hidden />
 
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

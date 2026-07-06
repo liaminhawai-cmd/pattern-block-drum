@@ -79,6 +79,13 @@ function fracLabel(b) {
 // Exact rational addition (avoids float drift for the running lane total).
 function addFrac(a, b) { return reduce(a.n * b.d + b.n * a.d, a.d * b.d); }
 function laneSumFrac(lane) { return lane.blocks.reduce((s, b) => addFrac(s, b), { n: 0, d: 1 }); }
+// A lane is "complete" once its blocks account for the whole bar exactly (mute
+// blocks count — they're rests). Used by Learn mode to gate playback.
+function laneComplete(lane) {
+  if (!lane.blocks.length) return false;
+  const s = laneSumFrac(lane);
+  return s.n === s.d;
+}
 
 /* ------------------------------ state ---------------------------------- */
 // Built-in synth voices (rendered to buffers at startup).
@@ -106,6 +113,7 @@ const state = {
   bpm: 96,
   master: 0.9,
   playing: false,
+  mode: 'create',   // 'create' (free play) or 'learn' (lanes gate on completeness, Groove Lab)
   lanes: [],
   denominators: Array.from({ length: ROWS }, (_, i) => i + 1),   // fraction-wall rows
 };
@@ -379,6 +387,7 @@ function markDirty() { eventsDirty = true; }
 function rebuildEvents() {
   events = [];
   state.lanes.forEach((lane, li) => {
+    if (state.mode === 'learn' && !laneComplete(lane)) return;   // silent until the bar is fully accounted for
     let off = 0;
     lane.blocks.forEach((b, bi) => {
       if (b.face !== 'mute' && off < 1 - EPS) {
@@ -540,6 +549,8 @@ function renderSeq() {
     laneEl.dataset.id = lane.id;
     laneEl.dataset.index = li;
     if (lane.muted || (solo && !lane.solo)) laneEl.classList.add('dim');
+    const learnGated = state.mode === 'learn' && lane.blocks.length && !laneComplete(lane);
+    if (learnGated) laneEl.classList.add('incomplete');
 
     /* gutter -------------------------------------------------------- */
     const gutter = el('div', 'gutter');
@@ -639,7 +650,10 @@ function renderSeq() {
     const sumFrac = laneSumFrac(lane);
     if (lane.blocks.length && sumFrac.n < sumFrac.d) {
       const remain = reduce(sumFrac.d - sumFrac.n, sumFrac.d);
-      const gapEl = el('div', 'gap', `<span class="gap-label">${fracLabel(remain)} left</span>`);
+      const gapText = learnGated
+        ? `add ${fracLabel(remain)} more — silent until this lane is a full bar`
+        : `${fracLabel(remain)} left`;
+      const gapEl = el('div', 'gap', `<span class="gap-label">${gapText}</span>`);
       gapEl.style.flex = `0 0 ${Math.min(fval(remain), 1) * 100}%`;
       track.appendChild(gapEl);
     }
@@ -647,6 +661,10 @@ function renderSeq() {
     // capacity readout
     const cap = el('div', 'cap');
     cap.textContent = capacityLabel(sumFrac);
+    if (state.mode === 'learn' && lane.blocks.length && sumFrac.n === sumFrac.d) {
+      cap.textContent = '';
+      cap.appendChild(el('span', 'complete-badge', '✓ complete'));
+    }
     track.appendChild(cap);
 
     // drop handling for the track (new block from palette OR moved block)
@@ -1178,6 +1196,156 @@ function clearAll() {
   markDirty(); renderSeq();
 }
 
+/* ------------------------------ mode: Create / Learn -------------------- */
+function setMode(mode) {
+  if (mode !== 'learn') { stopLabGroove(); stopLabTone(); }
+  state.mode = mode;
+  $('#modeCreate').classList.toggle('active', mode === 'create');
+  $('#modeLearn').classList.toggle('active', mode === 'learn');
+  $('#labPanel').hidden = mode !== 'learn';
+  $('#seqSub').textContent = mode === 'learn'
+    ? 'one bar per lane — a lane stays silent until its blocks add up to exactly one whole bar'
+    : 'one bar per lane — blocks tile left to right, a muted block is a rest';
+  if (mode === 'learn') updateLab();
+  markDirty(); renderSeq();
+}
+
+/* ------------------------------ Groove Lab ------------------------------ */
+// Named just-intonation ratios, keyed by "small:large" once reduced to lowest terms.
+const JUST_INTERVALS = {
+  '1:1': 'Unison', '1:2': 'Octave', '2:3': 'Perfect fifth', '3:4': 'Perfect fourth',
+  '4:5': 'Major third', '5:6': 'Minor third', '3:5': 'Major sixth', '5:8': 'Minor sixth',
+  '8:9': 'Major second (whole tone)', '15:16': 'Minor second (semitone)',
+  '4:7': 'Harmonic seventh', '5:9': 'Minor seventh', '8:15': 'Major seventh', '5:7': 'Septimal tritone',
+};
+const FUNK_LEVELS = [
+  { max: 1, label: '😌 Locked — no polyrhythm, one nests inside the other' },
+  { max: 2, label: '🙂 Classic polyrhythm' },
+  { max: 3, label: '😏 Deeper groove' },
+  { max: 4, label: '😎 Funky' },
+  { max: Infinity, label: '🤯 Deep funk' },
+];
+function funkLevel(score) { return FUNK_LEVELS.find((f) => score <= f.max).label; }
+
+function factCard(n) {
+  const factors = [...primeFactorize(n)];
+  if (!factors.length) return `<span class="lab-p" style="--c:hsl(224 12% 42%)">${n}</span>`;
+  return factors.map(([p, a]) => {
+    const c = denColor(p);
+    return Array.from({ length: a }, () => `<span class="lab-p" style="--c:${c}">${p}</span>`).join('');
+  }).join('<span class="lab-op">×</span>');
+}
+
+function labValues() {
+  const a = Math.max(1, Math.min(32, +$('#labA').value | 0 || 1));
+  const b = Math.max(1, Math.min(32, +$('#labB').value | 0 || 1));
+  return { a, b };
+}
+
+function updateLab() {
+  const { a, b } = labValues();
+  const g = gcd(a, b);
+  const lcm = (a * b) / g;
+  const score = Math.min(a, b) / g;
+
+  $('#labFactA').innerHTML = factCard(a);
+  $('#labFactB').innerHTML = factCard(b);
+  $('#labGcd').textContent = g;
+  $('#labLcm').textContent = lcm;
+  $('#labFunk').textContent = funkLevel(score);
+
+  let explain;
+  if (a === b) {
+    explain = `${a} and ${b} are the same number, so they always line up — no polyrhythm here.`;
+  } else if (g === Math.min(a, b)) {
+    explain = `${Math.max(a, b)} is a multiple of ${Math.min(a, b)}, so every ${Math.min(a, b)}-beat lines up with a ${Math.max(a, b)}-beat. Nothing to reconcile.`;
+  } else if (g === 1) {
+    explain = `${a} and ${b} share no common factor (HCF = 1) — they're coprime. To line them up exactly you need
+      LCM(${a}, ${b}) = ${lcm} equal slices: that's a ${Math.min(a, b)}-against-${Math.max(a, b)} polyrhythm.`;
+  } else {
+    const ra = a / g, rb = b / g;
+    explain = `${a} and ${b} share a factor of ${g} (HCF = ${g}). At heart this is the same relationship as
+      ${ra} against ${rb}, just scaled up — LCM(${a}, ${b}) = ${lcm} slices needed to draw it exactly.`;
+  }
+  $('#labExplain').textContent = explain;
+
+  const r = reduce(Math.min(a, b), Math.max(a, b));
+  const name = JUST_INTERVALS[`${r.n}:${r.d}`];
+  $('#labInterval').textContent = name ? `≈ ${name}` : 'a custom ratio — not a named interval, but still musical';
+}
+
+let labGrooveTimer = null, labGrooveNodes = [];
+function stopLabGroove() {
+  clearInterval(labGrooveTimer); labGrooveTimer = null;
+  $('#labPlayGroove').classList.remove('on');
+  $('#labPlayGroove').textContent = '▶ Hear the polyrhythm';
+}
+function playLabGroove() {
+  if (labGrooveTimer) { stopLabGroove(); return; }
+  ensureAudio();
+  const { a, b } = labValues();
+  const barDur = 2.4;   // seconds per bar, fixed and slow so the polyrhythm is easy to hear
+  const kick = voiceBuffers[0], clave = voiceBuffers[10];
+  let barStart = ctx.currentTime + 0.05;
+  const scheduleBar = () => {
+    for (let i = 0; i < a; i++) {
+      const src = ctx.createBufferSource(); src.buffer = kick;
+      const g = ctx.createGain(); g.gain.value = 0.8;
+      src.connect(g).connect(masterNode); src.start(barStart + (i / a) * barDur);
+    }
+    for (let i = 0; i < b; i++) {
+      const src = ctx.createBufferSource(); src.buffer = clave;
+      const g = ctx.createGain(); g.gain.value = 0.8;
+      src.connect(g).connect(masterNode); src.start(barStart + (i / b) * barDur);
+    }
+  };
+  scheduleBar();
+  barStart += barDur;
+  labGrooveTimer = setInterval(() => {
+    if (ctx.currentTime > barStart - 0.3) { scheduleBar(); barStart += barDur; }
+  }, 100);
+  $('#labPlayGroove').classList.add('on');
+  $('#labPlayGroove').textContent = '■ Stop';
+}
+
+let labToneNodes = null;
+function stopLabTone() {
+  if (!labToneNodes) return;
+  labToneNodes.forEach((n) => { try { n.stop(); } catch (_) {} });
+  labToneNodes = null;
+  $('#labPlayTone').classList.remove('on');
+  $('#labPlayTone').textContent = '🎵 Hear it as a pitch';
+}
+function playLabTone() {
+  if (labToneNodes) { stopLabTone(); return; }
+  ensureAudio();
+  const { a, b } = labValues();
+  const BASE = 220;
+  const o1 = ctx.createOscillator(); o1.frequency.value = BASE;
+  const o2 = ctx.createOscillator(); o2.frequency.value = BASE * (Math.max(a, b) / Math.min(a, b));
+  const g = ctx.createGain(); g.gain.value = 0.0001;
+  g.gain.setTargetAtTime(0.22, ctx.currentTime, 0.05);
+  o1.connect(g); o2.connect(g); g.connect(masterNode);
+  o1.start(); o2.start();
+  labToneNodes = [o1, o2, { stop: () => g.gain.setTargetAtTime(0, ctx.currentTime, 0.05) }];
+  $('#labPlayTone').classList.add('on');
+  $('#labPlayTone').textContent = '■ Stop';
+}
+
+// Pull two lanes' predominant denominators into the lab (skips lanes with mixed sizes).
+function labUseLanes() {
+  const dens = [];
+  for (const lane of state.lanes) {
+    if (!lane.blocks.length) continue;
+    const ds = new Set(lane.blocks.map((b) => reduce(b.n, b.d).d));
+    if (ds.size === 1) dens.push([...ds][0]);
+    if (dens.length === 2) break;
+  }
+  if (dens.length < 2) { toast('Build at least two lanes with a single consistent fraction first'); return; }
+  $('#labA').value = dens[0]; $('#labB').value = dens[1];
+  updateLab();
+}
+
 /* ------------------------------ controls ------------------------------- */
 function syncControls() {
   $('#bpm').value = state.bpm; $('#bpmOut').textContent = state.bpm;
@@ -1201,6 +1369,14 @@ function wireControls() {
   $('#midiPort').addEventListener('change', (e) => {
     if (midiAccess) midiOut = midiAccess.outputs.get(e.target.value) || midiOut;
   });
+
+  $('#modeCreate').addEventListener('click', () => setMode('create'));
+  $('#modeLearn').addEventListener('click', () => setMode('learn'));
+  $('#labA').addEventListener('input', updateLab);
+  $('#labB').addEventListener('input', updateLab);
+  $('#labUseLanes').addEventListener('click', labUseLanes);
+  $('#labPlayGroove').addEventListener('click', playLabGroove);
+  $('#labPlayTone').addEventListener('click', playLabTone);
 
   $('#helpModal').addEventListener('click', (e) => { if (e.target.id === 'helpModal' || e.target.dataset.close != null) $('#helpModal').hidden = true; });
 
