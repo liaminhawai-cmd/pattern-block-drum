@@ -1368,19 +1368,18 @@ const LESSONS = [
     ],
   },
   {
-    name: '2 · Rock beat: layers vs detail',
+    name: '2 · Rock beat (all in 2s)',
     setup: () => tutLanes([
       { voice: 0, name: 'Kick', blocks: [half('loud'), half('mid')] },
       { voice: 1, name: 'Snare', blocks: [q('mute'), half('loud'), q('loud')] },
       { voice: 3, name: 'Hi-hat' },
-      { voice: 9, name: 'Shaker' },
     ]),
     steps: [
       { text: "Real music now. A <b>4/4 rock beat</b>: <b>kick</b> on the halves (beats 1 & 3), <b>snare</b> on the backbeat (2 & 4). ▶ Play it." },
       { text: "Add <b>hi-hats</b>: fill the Hi-hat lane with <b>eighths</b> (⅛).", done: () => laneAllUnit(2, 8) },
-      { text: "Busier — but the <b>same groove</b>, right? 2, 4 and 8 are all made of <b>2s</b>, so they share the eighth grid and <b>lock</b>. Detail that stays in the family adds density, not a new feel." },
-      { text: "Now bring in a <b>triplet</b> bounce — the swing behind shuffle, gospel and trap: fill the <b>Shaker</b> lane with <b>thirds</b> (⅓).", done: () => laneAllUnit(3, 3) },
-      { text: "Feel it lean? Thirds add a factor of <b>3</b> the 2-grid never had, so it can't lock — the shared grid leaps (LCM jumps to 24) and the whole thing starts to <b>swing</b>. A detail with a <b>new prime</b> changes the feel; more 2s just add detail." },
+      { text: "Busier — but the <b>same groove</b>, right? Detail that stays in the family adds density, not a new feel." },
+      { text: "Prove it: <b>cut the Kick to the hats' grid</b> — cut each ½ so the whole Kick lane is <b>eighths</b> too.", done: () => laneAllUnit(0, 8) && laneAllUnit(2, 8) },
+      { text: "Everything lands on the <b>eighth grid</b> with room to spare — 2, 4 and 8 are all powers of <b>2</b>, so the shared grid is just <b>8</b> and they <b>lock</b>. That tight, four-square lock <i>is</i> the sound of rock. (Want a different feel? You need a new number — that's the next lessons.)" },
     ],
   },
   {
@@ -1395,7 +1394,8 @@ const LESSONS = [
     steps: [
       { text: "Blues lives in <b>6</b> — count 1-2-3-4-5-6, felt in two. Here's a shuffle <b>kick</b> and a backbeat <b>snare</b> on the 6-grid. ▶ Play the bed." },
       { text: "Add the <b>ride</b>: fill it with <b>sixths</b> (⅙) — all six, the shuffle roll.", done: () => laneAllUnit(2, 6) },
-      { text: "The whole groove sits on the <b>6-grid</b>, and 6 lines up with the 2-feel (6 is a multiple of 2), so it <b>locks</b> into that rolling <b>shuffle</b>. A bigger family than the rock beat — funkier flavour, still no fight." },
+      { text: "Now <b>cut the Kick and Snare to sixths</b> too, so every lane sits on the same grid.", done: () => laneAllUnit(0, 6) && laneAllUnit(1, 6) },
+      { text: "The whole groove is on the <b>6-grid</b>, and 6 lines up with the 2-feel (6 is a multiple of 2), so it still <b>locks</b> — into that rolling <b>shuffle</b>. A bigger family than rock, funkier flavour, still no fight." },
     ],
   },
   {
@@ -1404,7 +1404,8 @@ const LESSONS = [
     steps: [
       { text: "The <b>3-against-2</b> you met in Lesson 1 is the heartbeat of <b>West-African</b> and <b>Afro-Cuban</b> music — the 6/8 bell over a two-step." },
       { text: "Fill <b>Bell (3)</b> with three <b>⅓</b> blocks, and <b>Feet (2)</b> with two <b>½</b> blocks.", done: () => laneAllUnit(0, 3) && laneAllUnit(1, 2) },
-      { text: "▶ Play. Dancers feel it flip between 'in 3' and 'in 2' — that shimmer is a <b>hemiola</b>. The <b>son clave</b> and bossa-nova patterns push it further with <b>syncopation</b>: accents that dodge the main pulse. Try muting/rotating single pieces to move the accents around." },
+      { text: "▶ Play. Dancers feel it flip between 'in 3' and 'in 2' — that shimmer is a <b>hemiola</b>. Now <b>cut both lanes to their shared grid</b> to see where they meet.", done: () => laneAllUnit(0, 6) && laneAllUnit(1, 6) },
+      { text: "Sixths again — but here 3 and 2 share <b>no</b> factor, so they only touch at the top of the bar. That's a true <b>cross-rhythm</b>. The <b>son clave</b> and bossa patterns push it further with <b>syncopation</b> — accents that dodge the pulse; try rotating single pieces to move them." },
     ],
   },
   {
@@ -1417,7 +1418,8 @@ const LESSONS = [
     steps: [
       { text: "A <b>four-on-the-floor</b> dance beat: <b>kick</b> every quarter, <b>clap</b> on the backbeat. All 4s — rock solid and locked. ▶ Play." },
       { text: "Now the producer's twist: a hook on <b>five</b>. Fill the <b>Stab</b> lane with <b>fifths</b> (⅕).", done: () => laneAllUnit(2, 5) },
-      { text: "Feel the tension breathe in and out? 4 and 5 share <b>no</b> factor (LCM 20), so the stab slides against the four-on-the-floor and only re-locks once a bar — restless, hypnotic, danceable. Producers often <b>truncate</b> the 5 (hint it, don't spell it out). And that same <b>4:5</b> is a sweet <b>major third</b> as a pitch — flip <b>🎵 Tones</b> and hear it." },
+      { text: "To see the shared grid, <b>cut the Kick into 5s and the Stab into 4s</b> — until both lanes are <b>twentieths</b>. (Yes, that many!)", done: () => laneAllUnit(0, 20) && laneAllUnit(2, 20) },
+      { text: "<b>Twentieths</b> — LCM(4,5)=20. That's a huge grid, so the stab barely ever lines up with the four-on-the-floor: restless, hypnotic, danceable. Producers often <b>truncate</b> it (hint the 5, don't spell it out). And the same <b>4:5</b> is a sweet <b>major third</b> as a pitch — flip <b>🎵 Tones</b> and hear it." },
     ],
   },
   {

@@ -90,26 +90,26 @@ rules. **Learn** turns the app into a guided **tutorial** — and it *remembers*
 your Create pattern, resetting the board for the lessons and handing it back when
 you switch out. It's a set of lessons you can step through or jump between:
 
-1. **Polyrhythm basics** — build a 2-against-3, then solve *cut the pieces until
-   both lanes are the same size* and discover they meet at **sixths** (the LCM).
-2. **Rock beat: layers vs detail** — a real kick-and-backbeat; add eighth hats
-   (still all `2`s, so they **lock** — busier, same feel) and then a lane of
-   **thirds**, which brings a new factor of `3` and suddenly *changes the groove*.
-   The lesson: detail on the same prime family adds density; a new prime changes
-   the feel.
-3. **Blues shuffle (6/8)** — a "ba-bum" kick and backbeat snare felt in 2; add a
-   ride on **sixths** and hear `6` lock onto the `2`-pulse as a rolling triplet
-   shuffle.
-4. **Cross-rhythm (world music)** — the 3-against-2 that drives West-African and
-   Afro-Cuban music (the 6/8 bell, the hemiola), with a nod to clave/bossa
-   syncopation.
-5. **4-against-5** — the dance/prog favourite (LCM 20, so it's restless and often
-   *truncated*); the same `4:5` that's a sweet **major third** as a pitch.
+1. **Polyrhythm basics** — build a 2-against-3 and discover it resolves at
+   **sixths** (their LCM).
+2. **Rock beat (all in 2s)** — a real kick-and-backbeat plus eighth hats; cut
+   everything to eighths and see that `2`, `4` and `8` all lock on one grid.
+   That four-square lock *is* rock — no new number, no new feel.
+3. **Blues shuffle (6/8)** — a shuffle kick and backbeat snare on a 6-grid, a
+   ride on **sixths**; `6` locks onto the `2`-feel as a rolling triplet shuffle.
+4. **Cross-rhythm (world music)** — the 3-against-2 of West-African and
+   Afro-Cuban music (the 6/8 bell, the hemiola), where 2 and 3 share *no* factor
+   so they only meet once a bar, with a nod to clave/bossa syncopation.
+5. **4-against-5** — the dance/prog favourite: a four-on-the-floor beat with a
+   hook on 5, cut all the way to **twentieths** (LCM 20) so you *feel* how huge
+   the grid is; the same `4:5` is a sweet **major third** as a pitch.
 
-Throughout Learn mode, a lane stays **silent until it makes a full bar** (a muted
-block counts as a rest, and the missing amount is never spelled out — that's the
-puzzle), and **cutting a block mutes the new pieces**, so the groove holds while
-the finer grid is revealed.
+Every lesson makes you **cut every beat down to the shared grid** — you can't
+move on until both lanes actually meet at their LCM — so the maths is something
+you *do*, not just read. A lane stays **silent until it makes a full bar** (a
+muted block counts as a rest, and the missing amount is never spelled out), and
+**cutting a block mutes the new pieces**, so the groove holds while the finer
+grid is revealed.
 
 The **Groove Lab** is a popout (button in the toolbar, works in either mode).
 Pick any two numbers, or hit **Use my lanes**, and it live-computes:
