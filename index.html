@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pattern Block Drum Machine</title>
   <meta name="description" content="Grab fraction blocks from the wall and slide them into a sampler sequencer. Rotate block faces for dynamics, subdivide beats." />
-  <link rel="stylesheet" href="styles.css?v=10" />
+  <link rel="stylesheet" href="styles.css?v=11" />
 </head>
 <body>
   <div id="app">
@@ -43,7 +43,7 @@
 
       <div class="mode-toggle" role="tablist" aria-label="Mode">
         <button id="modeCreate" class="mode-btn active" data-mode="create" title="Free play — build patterns, no restrictions">🎛️ Create</button>
-        <button id="modeLearn" class="mode-btn" data-mode="learn" title="Guided mode — lanes must add up to a whole bar, plus the Groove Lab">🎓 Learn</button>
+        <button id="modeLearn" class="mode-btn" data-mode="learn" title="Guided tutorial — build a polyrhythm and discover the LCM">🎓 Learn</button>
       </div>
 
       <div class="tools">
@@ -53,6 +53,7 @@
         <button id="load" class="btn" title="Load last save">Load</button>
         <button id="export" class="btn" title="Download pattern as JSON">Export</button>
         <button id="import" class="btn" title="Import a pattern JSON">Import</button>
+        <button id="grooveLabBtn" class="btn" title="Open the Groove Lab (works in any mode)">🎓 Groove Lab</button>
         <button id="help" class="btn btn-ghost" title="How it works">?</button>
       </div>
     </header>
@@ -68,37 +69,19 @@
           <div id="palette" class="palette" aria-label="Fraction block palette"></div>
         </section>
 
-        <section class="panel lab-wrap" id="labPanel" hidden>
+        <section class="panel tut-wrap" id="tutorialPanel" hidden>
           <div class="section-head">
-            <span class="section-title">🎓 Groove Lab</span>
-            <span class="section-sub">pick two numbers and see how they groove together</span>
-            <button id="labUseLanes" class="btn btn-sm" title="Fill in from two lanes you've built">Use my lanes</button>
+            <span class="section-title">🎓 Tutorial</span>
+            <span id="tutStep" class="section-sub"></span>
+            <button id="openLab" class="btn btn-sm" title="Open the Groove Lab">Groove Lab</button>
           </div>
-          <div class="lab-body">
-            <div class="lab-inputs">
-              <label>A <input id="labA" type="number" min="1" max="32" value="2" /></label>
-              <span class="lab-vs">against</span>
-              <label>B <input id="labB" type="number" min="1" max="32" value="3" /></label>
-            </div>
-
-            <div class="lab-math">
-              <div id="labFactA" class="lab-fact"></div>
-              <span class="lab-op">×</span>
-              <div id="labFactB" class="lab-fact"></div>
-            </div>
-
-            <div class="lab-results">
-              <div class="lab-stat"><span class="lab-stat-label">HCF (GCD)</span><span id="labGcd" class="lab-stat-val"></span></div>
-              <div class="lab-stat"><span class="lab-stat-label">LCD (LCM)</span><span id="labLcm" class="lab-stat-val"></span></div>
-              <div class="lab-stat"><span class="lab-stat-label">Funk level</span><span id="labFunk" class="lab-stat-val"></span></div>
-            </div>
-
-            <p id="labExplain" class="lab-explain"></p>
-
-            <div class="lab-row">
-              <button id="labPlayGroove" class="btn">▶ Hear the polyrhythm</button>
-              <button id="labPlayTone" class="btn">🎵 Hear it as a pitch</button>
-              <span id="labInterval" class="lab-interval-name"></span>
+          <div class="tut-body">
+            <h3 id="tutTitle" class="tut-title"></h3>
+            <p id="tutText" class="tut-text"></p>
+            <div id="tutWaiting" class="tut-waiting" hidden><span class="tut-dot"></span> waiting for you to try it…</div>
+            <div class="tut-controls">
+              <button id="tutPrev" class="btn">‹ Back</button>
+              <button id="tutNext" class="btn btn-use">Next ›</button>
             </div>
           </div>
         </section>
@@ -108,6 +91,7 @@
         <div class="section-head">
           <span class="section-title">Sequencer</span>
           <span id="seqSub" class="section-sub">one bar per lane — blocks tile left to right, a muted block is a rest</span>
+          <button id="tonesToggle" class="btn btn-sm" title="Play the beat as pitched notes instead of drums">🎵 Tones</button>
           <button id="addLane" class="btn btn-sm" title="Add an instrument lane">+ Lane</button>
         </div>
         <div id="seq" class="seq" aria-label="Sequencer lanes"></div>
@@ -166,11 +150,15 @@
         <li><strong>MIDI out</strong> — flip <em>MIDI out</em> to On and pick a device. Each lane sends its own note
           on channel 10 (edit the little number by the lane name); the block face sets velocity.</li>
         <li><strong>Mix</strong> — <em>M</em> mutes a lane, <em>S</em> solos it, the slider sets its level.</li>
-        <li><strong>🎓 Learn mode</strong> — switch modes up in the header. In <em>Learn</em>, a lane stays silent
-          until its blocks add up to exactly one whole bar (mute blocks count — they're rests), teaching that every
-          moment needs to be accounted for. It also opens the <em>Groove Lab</em>: pick any two numbers to see their
-          HCF and LCM, how "funky" the polyrhythm between them is, hear it as a rhythm, and hear the same ratio as a
-          just-intonation musical interval. <em>Create</em> mode is the free-play sampler with no rules.</li>
+        <li><strong>🎵 Tones</strong> — flip <em>Tones</em> on to hear your beat as pitched notes instead of drums;
+          lanes are stacked on a scale so hits that land together make chords.</li>
+        <li><strong>🎓 Learn mode</strong> — a guided tutorial: it walks you through building a polyrhythm and then
+          cutting the pieces until both lanes share a grid, discovering the LCM by ear and eye. In Learn mode a lane
+          stays silent until it makes a full bar, and cutting a block mutes the new pieces so the groove is preserved
+          while the grid is revealed. <em>Create</em> mode is the free-play sampler with no rules.</li>
+        <li><strong>🎓 Groove Lab</strong> — a popout (button in the toolbar) for any two numbers: their HCF and LCM,
+          how "funky" their polyrhythm is, played as a rhythm, and heard as a just-intonation interval (7-limit and
+          up, so septimal steps like <em>7/6</em> get a real name).</li>
       </ul>
       <p class="modal-foot">Everything runs locally in your browser with the Web Audio API. Nothing is uploaded.</p>
     </div>
@@ -203,9 +191,45 @@
     </div>
   </div>
 
+  <div id="labModal" class="modal" hidden>
+    <div class="modal-card lab-card">
+      <button class="modal-close" data-close>×</button>
+      <h2>🎓 Groove Lab</h2>
+      <p class="lab-sub">Pick two numbers and see how they groove together.</p>
+      <div class="lab-body">
+        <div class="lab-inputs">
+          <label>A <input id="labA" type="number" min="1" max="32" value="2" /></label>
+          <span class="lab-vs">against</span>
+          <label>B <input id="labB" type="number" min="1" max="32" value="3" /></label>
+          <button id="labUseLanes" class="btn btn-sm" title="Fill in from two lanes you've built">Use my lanes</button>
+        </div>
+
+        <div class="lab-math">
+          <div id="labFactA" class="lab-fact"></div>
+          <span class="lab-op">×</span>
+          <div id="labFactB" class="lab-fact"></div>
+        </div>
+
+        <div class="lab-results">
+          <div class="lab-stat"><span class="lab-stat-label">HCF (GCD)</span><span id="labGcd" class="lab-stat-val"></span></div>
+          <div class="lab-stat"><span class="lab-stat-label">LCD (LCM)</span><span id="labLcm" class="lab-stat-val"></span></div>
+          <div class="lab-stat"><span class="lab-stat-label">Funk level</span><span id="labFunk" class="lab-stat-val"></span></div>
+        </div>
+
+        <p id="labExplain" class="lab-explain"></p>
+
+        <div class="lab-row">
+          <button id="labPlayGroove" class="btn">▶ Hear the polyrhythm</button>
+          <button id="labPlayTone" class="btn">🎵 Hear it as a pitch</button>
+          <span id="labInterval" class="lab-interval-name"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <input id="fileInput" type="file" accept="audio/*" hidden />
   <input id="jsonInput" type="file" accept="application/json,.json" hidden />
 
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>

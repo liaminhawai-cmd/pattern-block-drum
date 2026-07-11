@@ -90,7 +90,7 @@ function laneComplete(lane) {
 /* ------------------------------ state ---------------------------------- */
 // Built-in synth voices (rendered to buffers at startup).
 const VOICES = ['Kick', 'Snare', 'Clap', 'Closed Hat', 'Open Hat', 'Tom',
-  'Conga', 'Rim', 'Cowbell', 'Shaker', 'Clave', 'Bell'];
+  'Conga', 'Rimshot', 'Cowbell', 'Shaker', 'Clave', 'Bell'];
 
 let laneSeq = 0;
 const newLane = (voice, blocks = []) => ({
@@ -113,7 +113,9 @@ const state = {
   bpm: 96,
   master: 0.9,
   playing: false,
-  mode: 'create',   // 'create' (free play) or 'learn' (lanes gate on completeness, Groove Lab)
+  mode: 'create',   // 'create' (free play) or 'learn' (lanes gate on completeness, tutorial)
+  tones: false,     // play the beat as pitched notes instead of drum samples
+  tutorialStep: 0,
   lanes: [],
   denominators: Array.from({ length: ROWS }, (_, i) => i + 1),   // fraction-wall rows
 };
@@ -137,14 +139,16 @@ function registerAllFractions() {
 function seedDefault() {
   laneSeq = 0;
   state.lanes = [
-    // Kick: mostly halves — beat 1 (a full half), beat 3, plus one extra
-    // syncopated kick on the "and" of 4 (the last half split down to eighths).
-    newLane(0, [blk(1, 2, 'loud'), blk(1, 4, 'loud'), blk(1, 8, 'mute'), blk(1, 8, 'loud')]),
-    // Snare: halves, first one silent — a halftime backbeat, hit only on beat 3.
-    newLane(1, [blk(1, 2, 'mute'), blk(1, 2, 'loud')]),
-    // Closed hat: steady quarters, with the last quarter split into eighths
-    // for one extra hat right before the loop comes back around.
-    newLane(3, [blk(1, 4, 'soft'), blk(1, 4, 'mid'), blk(1, 4, 'soft'), blk(1, 8, 'mid'), blk(1, 8, 'loud')]),
+    // Kick: beat 1 (a half) then beat 3.
+    newLane(0, [blk(1, 2, 'loud'), blk(1, 4, 'loud'), blk(1, 4, 'mute')]),
+    // Snare: on the backbeats — quarter of silence, then a half (beat 2), then a
+    // quarter (beat 4). Hits land on 2 and 4.
+    newLane(1, [blk(1, 4, 'mute'), blk(1, 2, 'loud'), blk(1, 4, 'loud')]),
+    // Closed hat: steady quarters.
+    newLane(3, [blk(1, 4, 'soft'), blk(1, 4, 'mid'), blk(1, 4, 'soft'), blk(1, 4, 'mid')]),
+    // Jazzy rimshot: a laid-back cross-stick on beats 2 and 4 with a little
+    // "and of 3" pickup — the classic jazz comping feel.
+    newLane(7, [blk(1, 4, 'mute'), blk(1, 4, 'mid'), blk(1, 8, 'mute'), blk(1, 8, 'soft'), blk(1, 4, 'mid')]),
   ];
 }
 seedDefault();
@@ -194,21 +198,45 @@ function applyLaneGains() {
 
 function laneBuffer(lane) { return lane.buffer || voiceBuffers[lane.voice]; }
 
+// Lanes stacked on a minor-pentatonic scale, so whatever combination of lanes
+// hits together in Tones mode sounds consonant — coincident hits become chords.
+const TONE_DEGREES = [0, 3, 5, 7, 10];
+function laneToneFreq(li) {
+  const base = 48;   // C3-ish
+  const semis = TONE_DEGREES[li % TONE_DEGREES.length] + 12 * Math.floor(li / TONE_DEGREES.length);
+  return 440 * Math.pow(2, (base + semis - 69) / 12);
+}
+
 // Fire a lane's sound (and MIDI, if enabled) at audio-time `when`.
-function fire(lane, face, when) {
+function fire(lane, li, face, when) {
   if (face === 'mute') return;
-  const buf = laneBuffer(lane);
-  if (buf) {
-    ensureLaneNode(lane);
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
+  ensureLaneNode(lane);
+  if (state.tones) {
+    // Play the beat as a pitched note instead of the drum sample.
+    const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = laneToneFreq(li);
     const g = ctx.createGain();
-    g.gain.value = FACE_GAIN[face];
-    src.connect(g).connect(lane.node);
-    const entry = { src, lane };
-    src.onended = () => activeSources.delete(entry);
+    const peak = FACE_GAIN[face] * 0.5;
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(peak, when + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + 0.5);
+    o.connect(g).connect(lane.node);
+    const entry = { src: o, lane };
+    o.onended = () => activeSources.delete(entry);
     activeSources.add(entry);
-    src.start(when);
+    o.start(when); o.stop(when + 0.55);
+  } else {
+    const buf = laneBuffer(lane);
+    if (buf) {
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const g = ctx.createGain();
+      g.gain.value = FACE_GAIN[face];
+      src.connect(g).connect(lane.node);
+      const entry = { src, lane };
+      src.onended = () => activeSources.delete(entry);
+      activeSources.add(entry);
+      src.start(when);
+    }
   }
   midiFire(lane, face, when);
 }
@@ -336,9 +364,13 @@ function renderVoice(i) {
       o.frequency.setValueAtTime(330, t0); o.frequency.exponentialRampToValueAtTime(180, t0 + 0.18);
       env(o, 0.002, 0.9, 0.3).connect(out); o.start(t0); o.stop(t0 + 0.35); break;
     }
-    case 7: { // Rim
-      const o = oac.createOscillator(); o.type = 'square'; o.frequency.value = 1700;
-      env(o, 0.0005, 0.5, 0.05).connect(out); o.start(t0); o.stop(t0 + 0.08); break;
+    case 7: { // Rim / jazz cross-stick — a woody click with a short pitched ring
+      const click = noise(0.02); const bp = oac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = 3;
+      click.connect(bp); env(bp, 0.0004, 0.6, 0.02).connect(out); click.start(t0);
+      const body = oac.createOscillator(); body.type = 'triangle'; body.frequency.value = 420;
+      env(body, 0.0008, 0.45, 0.05).connect(out); body.start(t0); body.stop(t0 + 0.08);
+      const ring = oac.createOscillator(); ring.type = 'sine'; ring.frequency.value = 1650;
+      env(ring, 0.0006, 0.25, 0.04).connect(out); ring.start(t0); ring.stop(t0 + 0.06); break;
     }
     case 8: { // Cowbell
       const mk = (f) => { const o = oac.createOscillator(); o.type = 'square'; o.frequency.value = f; return o; };
@@ -416,7 +448,7 @@ function scheduler() {
     const ev = events[nextIndex];
     const t = loopStart + ev.time * loopDur();
     if (t < ctx.currentTime + ahead) {
-      fire(state.lanes[ev.lane], ev.face, t);
+      fire(state.lanes[ev.lane], ev.lane, ev.face, t);
       scheduleFlash(ev, t);
       nextIndex++;
       if (nextIndex >= events.length) { nextIndex = 0; loopStart += loopDur(); }
@@ -648,20 +680,22 @@ function renderSeq() {
     const sumFrac = laneSumFrac(lane);
     if (lane.blocks.length && sumFrac.n < sumFrac.d) {
       const remain = reduce(sumFrac.d - sumFrac.n, sumFrac.d);
+      // In Learn mode don't reveal how much is missing — that's the puzzle.
       const gapText = learnGated
-        ? `add ${fracLabel(remain)} more — silent until this lane is a full bar`
+        ? 'not a full bar yet — silent'
         : `${fracLabel(remain)} left`;
       const gapEl = el('div', 'gap', `<span class="gap-label">${gapText}</span>`);
       gapEl.style.flex = `0 0 ${Math.min(fval(remain), 1) * 100}%`;
       track.appendChild(gapEl);
     }
 
-    // capacity readout
+    // capacity readout — in Create mode show the exact fraction; in Learn mode
+    // show only "complete" (never the missing amount, so the bar stays a puzzle).
     const cap = el('div', 'cap');
-    cap.textContent = capacityLabel(sumFrac);
-    if (state.mode === 'learn' && lane.blocks.length && sumFrac.n === sumFrac.d) {
-      cap.textContent = '';
-      cap.appendChild(el('span', 'complete-badge', '✓ complete'));
+    if (state.mode === 'learn') {
+      if (lane.blocks.length && sumFrac.n === sumFrac.d) cap.appendChild(el('span', 'complete-badge', '✓ complete'));
+    } else {
+      cap.textContent = capacityLabel(sumFrac);
     }
     track.appendChild(cap);
 
@@ -698,6 +732,8 @@ function renderSeq() {
   // (re)attach playhead
   if (!ph) { ph = el('div', 'playhead'); ph.id = 'playhead'; }
   seq.appendChild(ph);
+
+  maybeAdvanceTutorial();   // check the tutorial goal after any pattern change
 }
 
 // sumFrac is the lane's exact placed total, e.g. { n: 5, d: 8 } for 5/8.
@@ -718,7 +754,11 @@ function rotateFace(lane, bi) {
 function subdivide(li, bi, k) {
   const lane = state.lanes[li];
   const b = lane.blocks[bi];
-  const pieces = Array.from({ length: k }, () => blk(b.n, b.d * k, b.face));
+  // In Learn mode, cutting keeps only the first piece sounding and mutes the
+  // rest — so the audible groove is unchanged while the finer grid is revealed
+  // (the point of "cut the pieces so they're all the same size").
+  const pieces = Array.from({ length: k }, (_, i) =>
+    blk(b.n, b.d * k, (state.mode === 'learn' && i > 0) ? 'mute' : b.face));
   lane.blocks.splice(bi, 1, ...pieces);
   // a new size like 1/15 may not be on the wall yet — add it and reflow
   if (registerFraction(pieces[0])) renderPalette();
@@ -1196,26 +1236,112 @@ function clearAll() {
 
 /* ------------------------------ mode: Create / Learn -------------------- */
 function setMode(mode) {
-  if (mode !== 'learn') { stopLabGroove(); stopLabTone(); }
   state.mode = mode;
   $('#modeCreate').classList.toggle('active', mode === 'create');
   $('#modeLearn').classList.toggle('active', mode === 'learn');
-  $('#labPanel').hidden = mode !== 'learn';
+  $('#tutorialPanel').hidden = mode !== 'learn';
   $('#seqSub').textContent = mode === 'learn'
-    ? 'one bar per lane — a lane stays silent until its blocks add up to exactly one whole bar'
+    ? 'Learn mode — a lane stays silent until it makes a full bar; cutting mutes the new pieces'
     : 'one bar per lane — blocks tile left to right, a muted block is a rest';
-  if (mode === 'learn') updateLab();
+  if (mode === 'learn') renderTutorial();
   markDirty(); renderSeq();
 }
 
+function toggleTones() {
+  state.tones = !state.tones;
+  stopSources();
+  const btn = $('#tonesToggle');
+  btn.classList.toggle('on', state.tones);
+  btn.textContent = state.tones ? '🎵 Tones: on' : '🎵 Tones';
+}
+
+/* ------------------------------ tutorial (Learn mode) ------------------- */
+// True when lane `li` is complete and made entirely of 1/den pieces.
+function laneAllUnit(li, den) {
+  const lane = state.lanes[li];
+  if (!lane || !lane.blocks.length || !laneComplete(lane)) return false;
+  return lane.blocks.every((b) => { const r = reduce(b.n, b.d); return r.n === 1 && r.d === den; });
+}
+
+const TUTORIAL = [
+  { title: 'Polyrhythms', manual: true,
+    text: "👋 Let's build a polyrhythm and find out why some grooves feel funkier than others. Hit <b>Next</b> to start." },
+  { title: 'A steady 2', done: () => laneAllUnit(0, 2),
+    text: "Make the <b>Kick</b> lane (the top one) hit <b>twice</b>: fill the whole bar with two <b>½</b> blocks. Clear it first if you need to (drag a block off the board to remove it)." },
+  { title: 'A steady 3', done: () => laneAllUnit(1, 3),
+    text: "Now the <b>Snare</b> lane: make it hit <b>three</b> times — fill it with <b>⅓</b> blocks." },
+  { title: '2 against 3', manual: true,
+    text: "▶ Press <b>Play</b>. Two beats pulling against three — a polyrhythm! They only meet at the very start of the bar. Hit <b>Next</b> when you've heard it." },
+  { title: 'Find the shared grid', done: () => laneAllUnit(0, 6) && laneAllUnit(1, 6),
+    text: "The puzzle: <b>cut the pieces until both lanes are made of the same size.</b> Right-click a block (or hover it and press a number) to cut it. In Learn mode the new pieces are muted, so your groove stays put. Keep going… what's the smallest size they can share?" },
+  { title: '🎉 Sixths!', manual: true, final: true,
+    text: "Both lines now sit on a grid of <b>6</b> — the smallest number 2 and 3 both divide into: their <b>LCM</b>. Fewer shared factors ⇒ more slices ⇒ funkier. Poke at 3-and-4 or 3-and-5 in the <b>Groove Lab</b> to feel the difference." },
+];
+
+function renderTutorial() {
+  const i = state.tutorialStep;
+  const step = TUTORIAL[i] || TUTORIAL[0];
+  $('#tutStep').textContent = `Step ${i + 1} of ${TUTORIAL.length}`;
+  $('#tutTitle').textContent = step.title;
+  $('#tutText').innerHTML = step.text;
+  $('#tutPrev').disabled = i === 0;
+  $('#tutNext').textContent = step.final ? '↻ Restart' : 'Next ›';
+  $('#tutWaiting').hidden = !step.done;
+}
+
+// Auto-advance when the current step's goal is reached (called after edits).
+function maybeAdvanceTutorial() {
+  if (state.mode !== 'learn') return;
+  const step = TUTORIAL[state.tutorialStep];
+  if (step && step.done && step.done() && state.tutorialStep < TUTORIAL.length - 1) {
+    state.tutorialStep++;
+    renderTutorial();
+    toast('Nice! ✓');
+  }
+}
+function tutorialNext() {
+  const step = TUTORIAL[state.tutorialStep];
+  state.tutorialStep = step && step.final ? 0 : Math.min(TUTORIAL.length - 1, state.tutorialStep + 1);
+  renderTutorial();
+}
+function tutorialPrev() { state.tutorialStep = Math.max(0, state.tutorialStep - 1); renderTutorial(); }
+
+/* ------------------------------ Groove Lab popout ---------------------- */
+function openLab() { updateLab(); $('#labModal').hidden = false; }
+function closeLab() { stopLabGroove(); stopLabTone(); $('#labModal').hidden = true; }
+
 /* ------------------------------ Groove Lab ------------------------------ */
-// Named just-intonation ratios, keyed by "small:large" once reduced to lowest terms.
-const JUST_INTERVALS = {
-  '1:1': 'Unison', '1:2': 'Octave', '2:3': 'Perfect fifth', '3:4': 'Perfect fourth',
-  '4:5': 'Major third', '5:6': 'Minor third', '3:5': 'Major sixth', '5:8': 'Minor sixth',
-  '8:9': 'Major second (whole tone)', '15:16': 'Minor second (semitone)',
-  '4:7': 'Harmonic seventh', '5:9': 'Minor seventh', '8:15': 'Major seventh', '5:7': 'Septimal tritone',
+// Base just-intonation intervals within one octave, keyed by "high:low" (ratio >= 1)
+// in lowest terms. Includes the 7- and 11-limit ratios Ben Johnston named, so
+// septimal steps like 7/6 and 7/4 get real names, not "custom".
+const BASE_INTERVALS = {
+  '1:1': 'Unison',
+  '16:15': 'Minor second', '9:8': 'Major second', '10:9': 'Major second',
+  '8:7': 'Supermajor second (septimal)',
+  '7:6': 'Subminor third (septimal)', '6:5': 'Minor third', '5:4': 'Major third',
+  '9:7': 'Supermajor third (septimal)', '14:11': 'Major third (undecimal)',
+  '4:3': 'Perfect fourth', '11:8': 'Undecimal tritone',
+  '7:5': 'Septimal tritone', '10:7': 'Septimal tritone', '45:32': 'Tritone',
+  '3:2': 'Perfect fifth', '14:9': 'Subminor sixth (septimal)',
+  '8:5': 'Minor sixth', '13:8': 'Neutral sixth (tridecimal)', '5:3': 'Major sixth',
+  '12:7': 'Supermajor sixth (septimal)',
+  '7:4': 'Harmonic seventh (septimal)', '16:9': 'Minor seventh', '9:5': 'Minor seventh',
+  '11:6': 'Neutral seventh (undecimal)', '15:8': 'Major seventh',
 };
+// Name the interval for a frequency ratio a:b, reducing by octaves so compound
+// ratios (e.g. 7/3 = a subminor third an octave up) still resolve to a name.
+function nameInterval(a, b) {
+  let num = Math.max(a, b), den = Math.min(a, b);
+  const g0 = gcd(num, den); num /= g0; den /= g0;
+  let octaves = 0;
+  while (num >= 2 * den) { den *= 2; octaves++; }
+  const g1 = gcd(num, den); num /= g1; den /= g1;
+  const base = BASE_INTERVALS[`${num}:${den}`];
+  if (!base) return null;
+  if (num === den) return octaves === 1 ? 'Octave' : `${octaves} octaves`;
+  if (octaves === 0) return base;
+  return `${base} + ${octaves} octave${octaves > 1 ? 's' : ''}`;
+}
 const FUNK_LEVELS = [
   { max: 1, label: '😌 Locked — no polyrhythm, one nests inside the other' },
   { max: 2, label: '🙂 Classic polyrhythm' },
@@ -1267,9 +1393,8 @@ function updateLab() {
   }
   $('#labExplain').textContent = explain;
 
-  const r = reduce(Math.min(a, b), Math.max(a, b));
-  const name = JUST_INTERVALS[`${r.n}:${r.d}`];
-  $('#labInterval').textContent = name ? `≈ ${name}` : 'a custom ratio — not a named interval, but still musical';
+  const name = nameInterval(a, b);
+  $('#labInterval').textContent = name ? `♪ ${name}` : 'a custom ratio — unusual, but still musical';
 }
 
 let labGrooveTimer = null, labGrooveNodes = [];
@@ -1370,11 +1495,17 @@ function wireControls() {
 
   $('#modeCreate').addEventListener('click', () => setMode('create'));
   $('#modeLearn').addEventListener('click', () => setMode('learn'));
+  $('#tonesToggle').addEventListener('click', toggleTones);
+  $('#tutPrev').addEventListener('click', tutorialPrev);
+  $('#tutNext').addEventListener('click', tutorialNext);
+  $('#openLab').addEventListener('click', openLab);
+  $('#grooveLabBtn').addEventListener('click', openLab);
   $('#labA').addEventListener('input', updateLab);
   $('#labB').addEventListener('input', updateLab);
   $('#labUseLanes').addEventListener('click', labUseLanes);
   $('#labPlayGroove').addEventListener('click', playLabGroove);
   $('#labPlayTone').addEventListener('click', playLabTone);
+  $('#labModal').addEventListener('click', (e) => { if (e.target.id === 'labModal' || e.target.dataset.close != null) closeLab(); });
 
   $('#helpModal').addEventListener('click', (e) => { if (e.target.id === 'helpModal' || e.target.dataset.close != null) $('#helpModal').hidden = true; });
 
@@ -1397,8 +1528,15 @@ function wireControls() {
   });
 
   document.addEventListener('keydown', (e) => {
+    // Escape closes an open modal first — even from a focused input inside it.
+    const recOpen = !$('#recModal').hidden, labOpen = !$('#labModal').hidden, helpOpen = !$('#helpModal').hidden;
+    if (e.key === 'Escape') {
+      if (recOpen) { closeRecorder(); return; }
+      if (labOpen) { closeLab(); return; }
+      if (helpOpen) { $('#helpModal').hidden = true; return; }
+    }
+    if (recOpen || labOpen || helpOpen) return;   // don't fire board shortcuts behind a modal
     if (e.target.matches('input, textarea')) return;
-    if (!$('#recModal').hidden) { if (e.key === 'Escape') closeRecorder(); return; }
     if (e.code === 'Space') { e.preventDefault(); state.playing ? stop() : play(); return; }
     if (e.key === 'Escape' && armed) { disarm(); return; }
     if (!hoverTarget) return;
@@ -1417,6 +1555,7 @@ function init() {
   syncControls();
   renderSeq();
   wireControls();
+  renderTutorial();
   refreshMidiUI();
   requestAnimationFrame(tickPlayhead);
 }

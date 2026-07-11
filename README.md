@@ -74,36 +74,41 @@ Everything runs locally in the browser with the Web Audio API. Nothing is upload
   length; one bar = four beats. Stopping cuts any sound still ringing, so long
   samples don't keep playing after you hit Stop.
 
+## 🎵 Tones
+
+Flip **Tones** on (in the sequencer header) to play your beat as pitched notes
+instead of drums. Lanes are stacked on a minor-pentatonic scale, so hits that
+land together turn into chords — a quick way to hear the *harmony* hiding in a
+rhythm.
+
 ## 🎓 Learn mode
 
-![Groove Lab in Learn mode](docs/learn-mode.png)
+![The tutorial and Groove Lab in Learn mode](docs/learn-mode.png)
 
 Switch modes in the header. **Create** is the free-play sampler above, with no
-rules. **Learn** adds two things aimed at teaching the maths behind the groove:
+rules. **Learn** turns the app into a guided **tutorial**:
 
-- **Fill the bar to hear it** — a lane stays silent until its blocks add up to
-  exactly one whole bar (a muted block still counts — it's a rest). An
-  unfinished lane is outlined in amber with a hint like "add 3/4 more — silent
-  until this lane is a full bar"; once it adds up, it gets a "✓ complete" badge
-  and joins the mix. This is the fraction-addition lesson: every moment in the
-  bar has to be accounted for, one way or another.
-- **The Groove Lab** — pick any two numbers (or hit **Use my lanes** to pull in
-  two lanes you've actually built) and it live-computes:
-  - their **HCF (GCD)** and **LCD (LCM)**, with a colour-coded prime
-    factorization (the same colours as the wall);
-  - a **funk level**, from 😌 *Locked* (one number is a multiple of the
-    other — no polyrhythm) up to 🤯 *Deep funk*. A 2‑against‑3 polyrhythm
-    needs sixths to draw exactly and lands on "Classic polyrhythm"; a
-    3‑against‑5 needs fifteenths and rates funkier still — the fewer factors
-    two numbers share, the more slices it takes to line them up, and the
-    funkier it sounds;
-  - a plain-English explanation of *why*, worked out from the shared factor
-    (or lack of one);
-  - a **▶ Hear the polyrhythm** button that plays the two numbers as a click
-    pattern so you can hear the relationship, not just read it;
-  - a **🎵 Hear it as a pitch** button — the exact same ratio, played as two
-    sustained tones. If it lands on a recognised just-intonation interval
-    (a perfect fifth, a major third, an octave…) it names it.
+- It walks you step by step through building a **2-against-3 polyrhythm**, then
+  sets the puzzle — *cut the pieces until both lanes are made of the same size* —
+  so you discover, by ear and eye, that they meet at **sixths** (the LCM of 2
+  and 3). It doesn't tell you the missing gaps; you find them.
+- In Learn mode a lane stays **silent until it makes a full bar** (a muted block
+  counts as a rest), and **cutting a block mutes the new pieces** — so your
+  groove stays exactly where it was while the finer grid is revealed underneath.
+
+The **Groove Lab** is a popout (button in the toolbar, works in either mode).
+Pick any two numbers, or hit **Use my lanes**, and it live-computes:
+
+- their **HCF (GCD)** and **LCD (LCM)**, with a colour-coded prime factorization
+  (the same colours as the wall);
+- a **funk level**, from 😌 *Locked* (one is a multiple of the other — no
+  polyrhythm) up to 🤯 *Deep funk*. Fewer shared factors ⇒ more slices to line
+  them up ⇒ funkier: 2-against-3 needs sixths, 3-against-5 needs fifteenths;
+- a plain-English explanation worked out from the shared factor;
+- **▶ Hear the polyrhythm** (the two numbers as a click pattern) and **🎵 Hear it
+  as a pitch** (the same ratio as two sustained tones). It names the interval in
+  **7-limit just intonation and beyond** — so septimal ratios like `7/6` come
+  back as a *subminor third*, not "custom", the way Ben Johnston would want.
 
 ### Keyboard shortcuts (while hovering a block)
 
