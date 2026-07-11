@@ -99,6 +99,8 @@ input[type=range]::-moz-range-thumb {
 }
 .btn:hover { background: #262a3a; border-color: #3a4055; }
 .btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .38; cursor: not-allowed; }
+.btn:disabled:hover { background: var(--panel-2); border-color: var(--line); }
 .btn-ghost { padding: 8px 11px; }
 .btn-sm { padding: 5px 10px; font-size: 12px; margin-left: auto; }
 

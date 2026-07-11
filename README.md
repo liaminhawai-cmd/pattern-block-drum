@@ -92,11 +92,14 @@ you switch out. It's a set of lessons you can step through or jump between:
 
 1. **Polyrhythm basics** — build a 2-against-3, then solve *cut the pieces until
    both lanes are the same size* and discover they meet at **sixths** (the LCM).
-2. **Rock beat + hi-hats** — a real 4/4 kick-and-backbeat; add eighth-note hats
-   and see that because `8` is a multiple of `4` they **lock** — finer detail, no
-   cross-rhythm. That's why straight rock feels solid.
-3. **Blues shuffle (6/8)** — a half-note pulse with sixths over it; `6` lines up
-   with `2`, so it locks, but the triplet subdivision gives it that rolling swing.
+2. **Rock beat: layers vs detail** — a real kick-and-backbeat; add eighth hats
+   (still all `2`s, so they **lock** — busier, same feel) and then a lane of
+   **thirds**, which brings a new factor of `3` and suddenly *changes the groove*.
+   The lesson: detail on the same prime family adds density; a new prime changes
+   the feel.
+3. **Blues shuffle (6/8)** — a "ba-bum" kick and backbeat snare felt in 2; add a
+   ride on **sixths** and hear `6` lock onto the `2`-pulse as a rolling triplet
+   shuffle.
 4. **Cross-rhythm (world music)** — the 3-against-2 that drives West-African and
    Afro-Cuban music (the 6/8 bell, the hemiola), with a nod to clave/bossa
    syncopation.
@@ -122,13 +125,18 @@ Pick any two numbers, or hit **Use my lanes**, and it live-computes:
   **7-limit just intonation and beyond** — so septimal ratios like `7/6` come
   back as a *subminor third*, not "custom", the way Ben Johnston would want.
 
-### Keyboard shortcuts (while hovering a block)
+Every edit is **undoable** — <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd>
+(or the ↶ / ↷ buttons). Undo snapshots keep loaded/recorded samples intact, and
+the history resets when you switch modes or lessons.
+
+### Keyboard shortcuts
 
 | Key | Action |
 | --- | --- |
-| <kbd>2</kbd>–<kbd>6</kbd> | Subdivide into that many pieces |
-| <kbd>M</kbd> | Merge with the next block |
-| <kbd>Del</kbd> / <kbd>Backspace</kbd> | Remove the block |
+| <kbd>2</kbd>–<kbd>6</kbd> | Subdivide the hovered block into that many pieces |
+| <kbd>M</kbd> | Merge the hovered block with the next one |
+| <kbd>Del</kbd> / <kbd>Backspace</kbd> | Remove the hovered block |
+| <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> | Undo / redo (also <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd>) |
 | <kbd>Esc</kbd> | Put down the armed brush |
 | <kbd>Space</kbd> | Play / stop |
 

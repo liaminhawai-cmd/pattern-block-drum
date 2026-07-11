@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pattern Block Drum Machine</title>
   <meta name="description" content="Grab fraction blocks from the wall and slide them into a sampler sequencer. Rotate block faces for dynamics, subdivide beats." />
-  <link rel="stylesheet" href="styles.css?v=12" />
+  <link rel="stylesheet" href="styles.css?v=13" />
 </head>
 <body>
   <div id="app">
@@ -47,6 +47,8 @@
       </div>
 
       <div class="tools">
+        <button id="undoBtn" class="btn" title="Undo (Ctrl+Z)" disabled>↶ Undo</button>
+        <button id="redoBtn" class="btn" title="Redo (Ctrl+Y)" disabled>↷ Redo</button>
         <button id="randomize" class="btn" title="Randomize a pattern">Randomize</button>
         <button id="clear" class="btn" title="Empty every lane">Clear</button>
         <button id="save" class="btn" title="Save to this browser">Save</button>
@@ -112,6 +114,7 @@
       <div class="legend-hint">
         Click a block to rotate its face · Right-click (or hover + <kbd>2</kbd>–<kbd>6</kbd>) to subdivide ·
         <kbd>M</kbd> merge with next · <kbd>Del</kbd> remove · drag a block off the board to delete it ·
+        <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo / <kbd>Ctrl</kbd>+<kbd>Y</kbd> redo ·
         drag an audio file onto a lane to load a sample, or click 🎙️ to record one
       </div>
     </footer>
@@ -233,6 +236,6 @@
   <input id="fileInput" type="file" accept="audio/*" hidden />
   <input id="jsonInput" type="file" accept="application/json,.json" hidden />
 
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>

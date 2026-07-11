@@ -139,8 +139,8 @@ function registerAllFractions() {
 function seedDefault() {
   laneSeq = 0;
   state.lanes = [
-    // Kick: beat 1 (a half) then beat 3.
-    newLane(0, [blk(1, 2, 'loud'), blk(1, 4, 'loud'), blk(1, 4, 'mute')]),
+    // Kick: on the halves — beats 1 & 3.
+    newLane(0, [blk(1, 2, 'loud'), blk(1, 2, 'mid')]),
     // Snare: on the backbeats — quarter of silence, then a half (beat 2), then a
     // quarter (beat 4). Hits land on 2 and 4.
     newLane(1, [blk(1, 4, 'mute'), blk(1, 2, 'loud'), blk(1, 4, 'loud')]),
@@ -746,12 +746,14 @@ function capacityLabel(sumFrac) {
 
 /* ------------------------------ block ops ------------------------------ */
 function rotateFace(lane, bi) {
+  pushUndo();
   const b = lane.blocks[bi];
   b.face = FACES[(FACES.indexOf(b.face) + 1) % FACES.length];
   markDirty(); renderSeq();
 }
 
 function subdivide(li, bi, k) {
+  pushUndo();
   const lane = state.lanes[li];
   const b = lane.blocks[bi];
   // In Learn mode, cutting keeps only the first piece sounding and mutes the
@@ -768,6 +770,7 @@ function subdivide(li, bi, k) {
 function mergeWithNext(li, bi) {
   const lane = state.lanes[li];
   if (bi >= lane.blocks.length - 1) { toast('Nothing after this block to merge'); return; }
+  pushUndo();
   const a = lane.blocks[bi], b = lane.blocks[bi + 1];
   const n = a.n * b.d + b.n * a.d;
   const d = a.d * b.d;
@@ -777,6 +780,7 @@ function mergeWithNext(li, bi) {
 }
 
 function deleteBlock(li, bi) {
+  pushUndo();
   state.lanes[li].blocks.splice(bi, 1);
   markDirty(); renderSeq();
 }
@@ -785,6 +789,7 @@ function insertBlock(li, index, block) {
   const lane = state.lanes[li];
   const sum = laneSum(lane);
   if (sum + fval(block) > 1 + 1e-6) return false;   // would overflow the bar
+  pushUndo();
   lane.blocks.splice(index, 0, block);
   markDirty(); renderSeq();
   return true;
@@ -806,19 +811,16 @@ function handleBlockDrop(e, li, track) {
   let index = dropIndexFor(track, e.clientX);
 
   if (d.kind === 'move') {
-    // remove from source first (adjust index if same lane and before insert point)
     const src = state.lanes[d.fromLane];
-    const moved = src.blocks.splice(d.fromIdx, 1)[0];
-    if (d.fromLane === li && d.fromIdx < index) index--;
     const target = state.lanes[li];
-    const sumWithout = laneSum(target);
-    if (sumWithout + fval(moved) > 1 + 1e-6) {
-      // doesn't fit — put it back
-      src.blocks.splice(d.fromIdx, 0, moved);
-      rejectFlash(track); toast('No room in that lane');
-    } else {
-      target.blocks.splice(index, 0, moved);
-    }
+    const moved = src.blocks[d.fromIdx];
+    // does it fit? (moving within a lane doesn't change that lane's total)
+    const targetSum = laneSum(target) - (d.fromLane === li ? fval(moved) : 0);
+    if (targetSum + fval(moved) > 1 + 1e-6) { rejectFlash(track); toast('No room in that lane'); return; }
+    pushUndo();
+    src.blocks.splice(d.fromIdx, 1);
+    if (d.fromLane === li && d.fromIdx < index) index--;
+    target.blocks.splice(index, 0, moved);
     markDirty(); renderSeq();
   } else {
     if (!insertBlock(li, index, blk(d.n, d.d, d.face))) {
@@ -834,15 +836,18 @@ function rejectFlash(track) {
 
 /* ------------------------------ lanes ---------------------------------- */
 function addLane() {
+  pushUndo();
   state.lanes.push(newLane(state.lanes.length));
   if (ctx) ensureLaneNode(state.lanes[state.lanes.length - 1]);
   markDirty(); applyLaneGains(); renderSeq();
 }
 function removeLane(li) {
+  pushUndo();
   state.lanes.splice(li, 1);
   markDirty(); applyLaneGains(); renderSeq();
 }
 function cycleVoice(lane) {
+  pushUndo();
   stopSources(lane);
   lane.voice = (lane.voice + 1) % VOICES.length;
   lane.buffer = null;
@@ -862,6 +867,7 @@ async function decodeInto(lane, file) {
   try {
     const buf = await file.arrayBuffer();
     const audio = await ctx.decodeAudioData(buf);
+    pushUndo();
     stopSources(lane);                    // cut the old sample if it's still playing
     lane.buffer = audio;
     lane.name = file.name.replace(/\.[^.]+$/, '');
@@ -1112,6 +1118,7 @@ function sliceBuffer(buffer, startFrac, endFrac) {
 
 function useRecording() {
   if (!recBuffer || !recLane) return;
+  pushUndo();
   stopSources(recLane);
   recLane.buffer = sliceBuffer(recBuffer, recTrim.start, recTrim.end);
   recLane.name = 'Rec ' + ++recCounter;
@@ -1160,6 +1167,66 @@ function toast(msg) {
   toastTimer = setTimeout(() => (t.hidden = true), 1800);
 }
 
+/* ------------------------------ undo / redo ---------------------------- */
+// In-memory snapshots (unlike serialize(), these keep AudioBuffer references so
+// undoing an edit doesn't drop a lane's loaded/recorded sample).
+let undoStack = [], redoStack = [];
+const UNDO_LIMIT = 200;
+
+function snapshotState() {
+  return {
+    bpm: state.bpm, master: state.master, tones: state.tones,
+    denominators: state.denominators.slice(),
+    lanes: state.lanes.map((l) => ({
+      id: l.id, name: l.name, voice: l.voice, gain: l.gain, muted: l.muted, solo: l.solo,
+      midi: l.midi, buffer: l.buffer,
+      blocks: l.blocks.map((b) => ({ n: b.n, d: b.d, face: b.face })),
+    })),
+  };
+}
+function restoreState(snap) {
+  stopSources();
+  state.bpm = snap.bpm; state.master = snap.master; state.tones = !!snap.tones;
+  state.denominators = snap.denominators.slice();
+  state.lanes = snap.lanes.map((s) => {
+    const lane = newLane(s.voice, s.blocks.map((b) => blk(b.n, b.d, b.face)));
+    lane.id = s.id; lane.name = s.name; lane.gain = s.gain; lane.muted = s.muted;
+    lane.solo = s.solo; lane.midi = s.midi; lane.buffer = s.buffer || null;
+    return lane;
+  });
+  laneSeq = state.lanes.reduce((m, l) => Math.max(m, l.id), laneSeq);
+  if (masterNode) masterNode.gain.setTargetAtTime(state.master, ctx.currentTime, 0.01);
+  if (ctx) { state.lanes.forEach(ensureLaneNode); applyLaneGains(); }
+  registerAllFractions();
+  syncControls(); markDirty(); renderPalette(); renderSeq();
+}
+
+// Call before any pattern-mutating edit.
+function pushUndo() {
+  undoStack.push(snapshotState());
+  if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+  redoStack.length = 0;
+  updateUndoButtons();
+}
+function clearUndo() { undoStack.length = 0; redoStack.length = 0; updateUndoButtons(); }
+function undo() {
+  if (!undoStack.length) { toast('Nothing to undo'); return; }
+  redoStack.push(snapshotState());
+  restoreState(undoStack.pop());
+  updateUndoButtons();
+}
+function redo() {
+  if (!redoStack.length) { toast('Nothing to redo'); return; }
+  undoStack.push(snapshotState());
+  restoreState(redoStack.pop());
+  updateUndoButtons();
+}
+function updateUndoButtons() {
+  const u = $('#undoBtn'), r = $('#redoBtn');
+  if (u) u.disabled = !undoStack.length;
+  if (r) r.disabled = !redoStack.length;
+}
+
 /* ------------------------------ persistence ---------------------------- */
 const SAVE_KEY = 'pbdm.pattern.v1';
 function serialize() {
@@ -1194,7 +1261,7 @@ function saveLocal() { localStorage.setItem(SAVE_KEY, JSON.stringify(serialize()
 function loadLocal() {
   const raw = localStorage.getItem(SAVE_KEY);
   if (!raw) { toast('Nothing saved yet'); return; }
-  try { deserialize(JSON.parse(raw)); toast('Loaded save'); } catch { toast('Save was corrupt'); }
+  try { pushUndo(); deserialize(JSON.parse(raw)); toast('Loaded save'); } catch { toast('Save was corrupt'); }
 }
 function exportJSON() {
   const blob = new Blob([JSON.stringify(serialize(), null, 2)], { type: 'application/json' });
@@ -1205,6 +1272,7 @@ function exportJSON() {
 
 /* ------------------------------ randomize ------------------------------ */
 function randomize() {
+  pushUndo();
   const choices = [
     [[2, 'a'], [4, 'a']], // halves/quarters
     [[3, 'a']], [[4, 'a']], [[5, 'a']], [[6, 'a']], [[8, 'a']],
@@ -1230,6 +1298,7 @@ function randomize() {
 }
 
 function clearAll() {
+  pushUndo();
   state.lanes.forEach((l) => (l.blocks = []));
   markDirty(); renderSeq();
 }
@@ -1239,13 +1308,14 @@ let createSnapshot = null;   // remembers the Create-mode pattern while in Learn
 
 function setMode(mode) {
   if (mode === state.mode) return;
+  clearUndo();   // undo history is scoped to the current editing context
   if (mode === 'learn') {
-    createSnapshot = serialize();          // stash the free-play pattern
+    createSnapshot = snapshotState();      // stash the free-play pattern (keeps samples)
     state.mode = 'learn';
     enterLesson(state.lesson || 0);        // reset the board for the tutorial
   } else {
     state.mode = 'create';
-    if (createSnapshot) { deserialize(createSnapshot); createSnapshot = null; }   // bring it back
+    if (createSnapshot) { restoreState(createSnapshot); createSnapshot = null; }   // bring it back
     else { markDirty(); renderSeq(); }
   }
   $('#modeCreate').classList.toggle('active', mode === 'create');
@@ -1298,28 +1368,32 @@ const LESSONS = [
     ],
   },
   {
-    name: '2 · Rock beat + hi-hats',
+    name: '2 · Rock beat: layers vs detail',
     setup: () => tutLanes([
-      { voice: 0, name: 'Kick', blocks: [q('loud'), q('mute'), q('loud'), q('mute')] },
-      { voice: 1, name: 'Snare', blocks: [q('mute'), q('loud'), q('mute'), q('loud')] },
+      { voice: 0, name: 'Kick', blocks: [half('loud'), half('mid')] },
+      { voice: 1, name: 'Snare', blocks: [q('mute'), half('loud'), q('loud')] },
       { voice: 3, name: 'Hi-hat' },
+      { voice: 5, name: 'Tom' },
     ]),
     steps: [
-      { text: "Real music now. Here's a <b>4/4 rock beat</b>: kick on 1 & 3, snare on the backbeats 2 & 4 (both on <b>quarters</b>). ▶ Play it." },
-      { text: "Add <b>hi-hats</b>: fill the Hi-hat lane with <b>eighths</b> (⅛). Drag in ⅛ blocks, or place a quarter and cut it in two.", done: () => laneAllUnit(2, 8) },
-      { text: "Now three lanes share the <b>eighth-note grid</b>. But <b>8 is a multiple of 4</b> — the hats land exactly on and between the quarters. They <b>lock</b>: no cross-rhythm, just finer detail. That's why straight rock feels solid, not swung." },
+      { text: "Real music now. A <b>4/4 rock beat</b>: <b>kick</b> on the halves (beats 1 & 3), <b>snare</b> on the backbeat (2 & 4). ▶ Play it." },
+      { text: "Add <b>hi-hats</b>: fill the Hi-hat lane with <b>eighths</b> (⅛).", done: () => laneAllUnit(2, 8) },
+      { text: "Busier — but the <b>same groove</b>, right? 2, 4 and 8 are all made of <b>2s</b>, so they share the eighth grid and <b>lock</b>. A detail that stays in the family doesn't change the feel, just the density." },
+      { text: "Now a detail that <i>does</i>: fill the <b>Tom</b> lane with <b>thirds</b> (⅓).", done: () => laneAllUnit(3, 3) },
+      { text: "Feel the pull? Thirds bring a factor of <b>3</b> the 2-grid never had, so the shared grid leaps (LCM jumps to 24). A detail that adds a <b>new prime</b> changes the <b>feel</b> — that's the line between 'busier' and 'a new groove'." },
     ],
   },
   {
     name: '3 · Blues shuffle (6/8)',
     setup: () => tutLanes([
-      { voice: 0, name: 'Pulse', blocks: [half('loud'), half('loud')] },
-      { voice: 7, name: 'Ride' },
+      { voice: 0, name: 'Kick', blocks: [blk(1, 4, 'loud'), blk(1, 8, 'mute'), blk(1, 8, 'loud'), blk(1, 2, 'mute')] },
+      { voice: 1, name: 'Snare', blocks: [q('mute'), half('loud'), q('loud')] },
+      { voice: 4, name: 'Ride' },
     ]),
     steps: [
-      { text: "A <b>blues shuffle</b> feels 'in 2' but rolls underneath. Here's the <b>½-note pulse</b> — the foot-tap. ▶ Play it." },
-      { text: "Now fill the <b>Ride</b> lane with <b>sixths</b> (⅙) — six even swung notes across the bar.", done: () => laneAllUnit(1, 6) },
-      { text: "Hear it? <b>6 lines up with 2</b> (6 is a multiple of 2): every ride note is either on the pulse or exactly between. It <b>locks</b> — but the triplet subdivision gives blues and jazz that rolling <b>shuffle</b> lope. Subdivision makes feel, not just polyrhythm." },
+      { text: "A <b>blues shuffle</b>: a 'ba-bum' kick and a backbeat snare, felt 'in 2'. ▶ Play the bed." },
+      { text: "Add the <b>ride</b>: fill the Ride lane with <b>sixths</b> (⅙) — the shuffle's triplet roll.", done: () => laneAllUnit(2, 6) },
+      { text: "Hear it? <b>6 lines up with 2</b> (6 is a multiple of 2): the triplets land on and between the pulse, so it <b>locks</b> — but that subdivision is the rolling <b>shuffle</b> of blues and jazz. Same trick as the rock hats, funkier flavour." },
     ],
   },
   {
@@ -1353,6 +1427,7 @@ function currentLesson() { return LESSONS[state.lesson] || LESSONS[0]; }
 function currentStep() { return currentLesson().steps[state.step] || currentLesson().steps[0]; }
 
 function enterLesson(li, runSetup = true) {
+  clearUndo();   // a fresh lesson starts a fresh undo history
   state.lesson = Math.max(0, Math.min(LESSONS.length - 1, li));
   state.step = 0;
   if (runSetup && currentLesson().setup) currentLesson().setup();
@@ -1592,6 +1667,8 @@ function wireControls() {
     if (midiAccess) midiOut = midiAccess.outputs.get(e.target.value) || midiOut;
   });
 
+  $('#undoBtn').addEventListener('click', undo);
+  $('#redoBtn').addEventListener('click', redo);
   $('#modeCreate').addEventListener('click', () => setMode('create'));
   $('#modeLearn').addEventListener('click', () => setMode('learn'));
   $('#tonesToggle').addEventListener('click', toggleTones);
@@ -1623,7 +1700,7 @@ function wireControls() {
   });
   $('#jsonInput').addEventListener('change', async (e) => {
     const f = e.target.files[0];
-    if (f) { try { deserialize(JSON.parse(await f.text())); toast('Imported'); } catch { toast('Invalid JSON'); } }
+    if (f) { try { const data = JSON.parse(await f.text()); pushUndo(); deserialize(data); toast('Imported'); } catch { toast('Invalid JSON'); } }
     e.target.value = '';
   });
 
@@ -1637,6 +1714,12 @@ function wireControls() {
     }
     if (recOpen || labOpen || helpOpen) return;   // don't fire board shortcuts behind a modal
     if (e.target.matches('input, textarea')) return;
+    // Undo / redo (Ctrl/Cmd+Z, Ctrl/Cmd+Y or Shift+Z)
+    if (e.ctrlKey || e.metaKey) {
+      const k = e.key.toLowerCase();
+      if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
+      if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); return; }
+    }
     if (e.code === 'Space') { e.preventDefault(); state.playing ? stop() : play(); return; }
     if (e.key === 'Escape' && armed) { disarm(); return; }
     if (!hoverTarget) return;
