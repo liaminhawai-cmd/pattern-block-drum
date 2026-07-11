@@ -1341,6 +1341,20 @@ function laneAllUnit(li, den) {
   if (!lane || !lane.blocks.length || !laneComplete(lane)) return false;
   return lane.blocks.every((b) => { const r = reduce(b.n, b.d); return r.n === 1 && r.d === den; });
 }
+// The single unit size (1/k) a lane is made of, or null if empty/incomplete/mixed.
+function laneUnit(li) {
+  const lane = state.lanes[li];
+  if (!lane || !lane.blocks.length || !laneComplete(lane)) return null;
+  const ks = new Set(lane.blocks.map((b) => { const r = reduce(b.n, b.d); return r.n === 1 ? r.d : -1; }));
+  return ks.size === 1 && !ks.has(-1) ? [...ks][0] : null;
+}
+// True when the listed lanes all sit on the SAME single grid — i.e. they line
+// up. Used for "cut until they match" (any common grid passes, so kids find it
+// by trial and error rather than being told the number).
+function lanesMatch(...indices) {
+  const ks = indices.map(laneUnit);
+  return ks.every((k) => k) && new Set(ks).size === 1;
+}
 // Replace the lanes for a lesson setup (voice, name, blocks).
 function tutLanes(specs) {
   laneSeq = 0;
@@ -1356,77 +1370,82 @@ const half = (face) => blk(1, 2, face);    // a half
 
 const LESSONS = [
   {
-    name: '1 · Polyrhythm basics (2 vs 3)',
+    name: '1 · Two against three',
     setup: () => tutLanes([{ voice: 0, name: 'Kick' }, { voice: 1, name: 'Snare' }]),
     steps: [
-      { text: "👋 Let's build a <b>polyrhythm</b> — two rhythms at once — and find out why some grooves feel funkier than others." },
-      { text: "Fill the <b>Kick</b> lane so it hits <b>twice</b>: two <b>½</b> blocks, filling the whole bar.", done: () => laneAllUnit(0, 2) },
-      { text: "Now fill the <b>Snare</b> lane so it hits <b>three</b> times — three <b>⅓</b> blocks.", done: () => laneAllUnit(1, 3) },
-      { text: "▶ Press <b>Play</b>. Two against three! They only meet at the very start of the bar — that tug is the polyrhythm." },
-      { text: "The puzzle: <b>cut every piece until both lanes are the same size.</b> Right-click a block to cut it (the new pieces mute, so your groove stays). How small must they get to match?", done: () => laneAllUnit(0, 6) && laneAllUnit(1, 6) },
-      { text: "🎉 <b>Sixths!</b> 6 is the smallest number both 2 and 3 divide into — their <b>LCM</b>. That shared grid is where a polyrhythm 'resolves'." },
+      { text: "👋 Let's stack two rhythms at once — a <b>polyrhythm</b> — and feel why some grooves lock and some pull." },
+      { text: "Make the <b>Kick</b> hit <b>twice</b>: fill the bar with two <b>½</b> blocks.", done: () => laneAllUnit(0, 2) },
+      { text: "Make the <b>Snare</b> hit <b>three</b> times: fill it with three <b>⅓</b> blocks.", done: () => laneAllUnit(1, 3) },
+      { text: "▶ Press <b>Play</b>. Two against three — hear how they pull, meeting only at the very start of the bar? That tug is the polyrhythm." },
+      { text: "Now the puzzle: <b>cut the pieces until both lanes are made of the same size and every hit lines up.</b> Right-click a block to cut it — the new pieces mute, so your groove stays. Trial and error: how small do they need to get?", done: () => lanesMatch(0, 1) },
+      { text: "🎉 They line up! There's a grid where the two rhythms finally agree. <i>(Curious what size that is, and why? Open the <b>Groove Lab</b> — it does the maths for you.)</i>" },
     ],
   },
   {
-    name: '2 · Rock beat (all in 2s)',
+    name: '2 · Rock (why it locks)',
     setup: () => tutLanes([
-      { voice: 0, name: 'Kick', blocks: [half('loud'), half('mid')] },
+      { voice: 0, name: 'Kick', blocks: [half('loud'), q('loud'), blk(1, 8, 'mute'), blk(1, 8, 'mute')] },
       { voice: 1, name: 'Snare', blocks: [q('mute'), half('loud'), q('loud')] },
       { voice: 3, name: 'Hi-hat', blocks: [q('mid'), q('soft'), q('mid'), q('soft')] },
     ]),
     steps: [
-      { text: "Real music now. The rock skeleton: <b>hi-hats</b> on straight <b>quarters</b>, <b>kick</b> on 1 & 3, <b>snare</b> on the backbeat (2 & 4). ▶ Play it." },
-      { text: "Try a finer grid: <b>cut the Snare into eighths</b> (⅛). Cut each block until the whole Snare lane is ⅛s.", done: () => laneAllUnit(1, 8) },
-      { text: "Hear it? <b>Identical.</b> Cutting mutes the new slices, so it just re-draws the same groove on a finer grid — a measuring lens, not a new sound (exactly how we lined up 2 and 3 back in Lesson 1). Eighths are still 2s." },
-      { text: "Now put the <b>whole kit on one grid</b>: cut the <b>Kick</b> and <b>Hi-hat</b> to eighths too.", done: () => laneAllUnit(0, 8) && laneAllUnit(2, 8) },
-      { text: "2, 4 and 8 are all powers of <b>2</b>, so they share the eighth grid and <b>lock</b> — that tight, four-square lock <i>is</i> rock. It never needed a new number. Change the number and you change the feel: that's the next lessons." },
+      { text: "The rock skeleton: <b>hi-hats</b> on straight quarters, <b>kick</b> on 1 & 3, <b>snare</b> on the backbeat. ▶ Play it." },
+      { text: "Give the kick a <b>push</b>: click the last little Kick slice (far right, greyed-out) to turn it up — a kick that lands just before beat 1 comes round again.", done: () => state.lanes[0].blocks.some((b) => { const r = reduce(b.n, b.d); return r.d === 8 && b.face !== 'mute'; }) },
+      { text: "That push is a smaller slice than the hats. <b>Recut the hi-hats until they match it</b> — cut each hat until they line up with the kick's smallest piece.", done: () => laneAllUnit(2, 8) },
+      { text: "Doesn't sound super different, does it? The hats just fill in around the same groove. In rock everything shares one easy grid, so it all <b>locks</b> — that tight, four-square lock <i>is</i> the sound. To change the feel you need a different kind of number… next lessons." },
     ],
   },
   {
-    name: '3 · Blues shuffle (6/8)',
-    // Blues lives on a 6-grid. Kick = 2/6 · 1/6 · 3/6 (hits at 0, 2/6, 3/6);
-    // snare = a muted half then a half (backbeat at the midpoint).
+    name: '3 · Blues shuffle',
+    // Kick sounds on the 6-grid at 1,3,4,5,6 (position 2 held silent inside the
+    // opening 1/3 block); snare is a muted half then a half (backbeat midpoint).
     setup: () => tutLanes([
-      { voice: 0, name: 'Kick', blocks: [blk(1, 3, 'loud'), blk(1, 6, 'loud'), blk(1, 2, 'loud')] },
+      { voice: 0, name: 'Kick', blocks: [blk(1, 3, 'loud'), blk(1, 6, 'loud'), blk(1, 6, 'loud'), blk(1, 6, 'loud'), blk(1, 6, 'loud')] },
       { voice: 1, name: 'Snare', blocks: [half('mute'), half('loud')] },
       { voice: 4, name: 'Ride' },
     ]),
     steps: [
-      { text: "Blues lives in <b>6</b> — count 1-2-3-4-5-6, felt in two. Here's a shuffle <b>kick</b> and a backbeat <b>snare</b> on the 6-grid. ▶ Play the bed." },
-      { text: "Add the <b>ride</b>: fill it with <b>sixths</b> (⅙) — all six, the shuffle roll.", done: () => laneAllUnit(2, 6) },
-      { text: "Now <b>cut the Kick and Snare to sixths</b> too, so every lane sits on the same grid.", done: () => laneAllUnit(0, 6) && laneAllUnit(1, 6) },
-      { text: "The whole groove is on the <b>6-grid</b>, and 6 lines up with the 2-feel (6 is a multiple of 2), so it still <b>locks</b> — into that rolling <b>shuffle</b>. A bigger family than rock, funkier flavour, still no fight." },
+      { text: "A <b>blues shuffle</b>, felt in two but rolling underneath. Here's a ba-bum <b>kick</b> and a backbeat <b>snare</b>. ▶ Play the bed." },
+      { text: "Add the <b>ride</b> roll: fill it with <b>sixths</b> (⅙) — six even swung notes.", done: () => laneAllUnit(2, 6) },
+      { text: "Now <b>cut the Kick and Snare until every lane lines up</b> with the ride — trial and error until they're all the same size.", done: () => lanesMatch(0, 1, 2) },
+      { text: "Everything sits together, but that rolling triplet subdivision is the <b>shuffle</b> — the lope of blues and jazz. A bigger family than rock, funkier flavour, still no fight. <i>(Groove Lab if you want the numbers.)</i>" },
     ],
   },
   {
-    name: '4 · Cross-rhythm (world music)',
-    setup: () => tutLanes([{ voice: 8, name: 'Bell (3)' }, { voice: 6, name: 'Feet (2)' }]),
+    name: '4 · Ewe drumming (Ghana)',
+    // A West-African 3-against-4 feel: a gankoguí bell in 4, an axatse shaker
+    // keeping the twelve-pulse, and a drum the learner sets to 3.
+    setup: () => tutLanes([
+      { voice: 8, name: 'Bell', blocks: [q('loud'), q('mid'), q('mid'), q('mid')] },
+      { voice: 6, name: 'Drum' },
+      { voice: 9, name: 'Shaker', blocks: Array.from({ length: 12 }, (_, i) => blk(1, 12, i % 2 ? 'soft' : 'mid')) },
+    ]),
     steps: [
-      { text: "The <b>3-against-2</b> you met in Lesson 1 is the heartbeat of <b>West-African</b> and <b>Afro-Cuban</b> music — the 6/8 bell over a two-step." },
-      { text: "Fill <b>Bell (3)</b> with three <b>⅓</b> blocks, and <b>Feet (2)</b> with two <b>½</b> blocks.", done: () => laneAllUnit(0, 3) && laneAllUnit(1, 2) },
-      { text: "▶ Play. Dancers feel it flip between 'in 3' and 'in 2' — that shimmer is a <b>hemiola</b>. Now <b>cut both lanes to their shared grid</b> to see where they meet.", done: () => laneAllUnit(0, 6) && laneAllUnit(1, 6) },
-      { text: "Sixths again — but here 3 and 2 share <b>no</b> factor, so they only touch at the top of the bar. That's a true <b>cross-rhythm</b>. The <b>son clave</b> and bossa patterns push it further with <b>syncopation</b> — accents that dodge the pulse; try rotating single pieces to move them." },
+      { text: "Ewe drumming from <b>Ghana</b>. The <b>bell</b> (gankoguí) keeps a steady four and the <b>shaker</b> (axatse) fills the pulse. ▶ Play." },
+      { text: "Add the <b>drum</b> across the top: make it hit <b>three</b> even times.", done: () => laneAllUnit(1, 3) },
+      { text: "Feel it breathe? The bell's four and the drum's three lean on each other, agreeing only here and there. <b>Cut the Bell and Drum until everything lines up</b> — keep cutting and listening till they match.", done: () => lanesMatch(0, 1, 2) },
+      { text: "There's the shared grid — but the four and the three still <i>weave</i>, and that weave is the engine of West-African drumming and every 6/8 groove that grew from it: Afro-Cuban, jazz, gospel. Rock locked; this one dances." },
     ],
   },
   {
-    name: '5 · 4-against-5 (dance & prog)',
+    name: '5 · Four against five',
     setup: () => tutLanes([
       { voice: 0, name: 'Kick', blocks: [q('loud'), q('loud'), q('loud'), q('loud')] },   // four on the floor
       { voice: 2, name: 'Clap', blocks: [q('mute'), q('loud'), q('mute'), q('loud')] },     // backbeat
       { voice: 11, name: 'Stab' },
     ]),
     steps: [
-      { text: "A <b>four-on-the-floor</b> dance beat: <b>kick</b> every quarter, <b>clap</b> on the backbeat. All 4s — rock solid and locked. ▶ Play." },
-      { text: "Now the producer's twist: a hook on <b>five</b>. Fill the <b>Stab</b> lane with <b>fifths</b> (⅕).", done: () => laneAllUnit(2, 5) },
-      { text: "To see the shared grid, <b>cut the Kick into 5s and the Stab into 4s</b> — until both lanes are <b>twentieths</b>. (Yes, that many!)", done: () => laneAllUnit(0, 20) && laneAllUnit(2, 20) },
-      { text: "<b>Twentieths</b> — LCM(4,5)=20. That's a huge grid, so the stab barely ever lines up with the four-on-the-floor: restless, hypnotic, danceable. Producers often <b>truncate</b> it (hint the 5, don't spell it out). And the same <b>4:5</b> is a sweet <b>major third</b> as a pitch — flip <b>🎵 Tones</b> and hear it." },
+      { text: "A <b>four-on-the-floor</b> dance beat: <b>kick</b> every quarter, <b>clap</b> on the backbeat. Rock-solid. ▶ Play." },
+      { text: "Now the producer's twist: fill the <b>Stab</b> lane so it hits <b>five</b> even times.", done: () => laneAllUnit(2, 5) },
+      { text: "Hear it slide? Four and five almost never agree. <b>Cut the Kick and the Stab until they finally line up</b> — fair warning, it takes a <i>lot</i> of tiny pieces.", done: () => lanesMatch(0, 2) },
+      { text: "Look how fine you had to cut before they matched — that's <i>why</i> it feels restless and hypnotic, and so danceable. Producers often just hint the five instead of spelling it out. And that same four-and-five, played as two pitches, is one of the sweetest chords there is — flip <b>🎵 Tones</b> and hear it." },
     ],
   },
   {
     name: '6 · Explore',
     setup: () => tutLanes([{ voice: 0, name: 'A' }, { voice: 1, name: 'B' }]),
     steps: [
-      { text: "You've got the idea: <b>shared factors lock; coprime numbers cross</b>, and the bigger the <b>LCM</b>, the more it slides from funky toward pure tension. Open the <b>Groove Lab</b> and try any pair — 5-against-6, 7-against-8 — to feel where groove tips into dissonance. Sandbox is all yours." },
+      { text: "You've felt it: numbers that fit inside each other <b>lock</b>; numbers that don't <b>weave</b>, and the harder they are to line up, the more it slides from funky toward pure tension. Build any two lanes and cut till they match — or open the <b>Groove Lab</b> to see the numbers behind the feel. The sandbox is yours." },
     ],
   },
 ];

@@ -90,26 +90,29 @@ rules. **Learn** turns the app into a guided **tutorial** — and it *remembers*
 your Create pattern, resetting the board for the lessons and handing it back when
 you switch out. It's a set of lessons you can step through or jump between:
 
-1. **Polyrhythm basics** — build a 2-against-3 and discover it resolves at
-   **sixths** (their LCM).
-2. **Rock beat (all in 2s)** — a real kick-and-backbeat plus eighth hats; cut
-   everything to eighths and see that `2`, `4` and `8` all lock on one grid.
-   That four-square lock *is* rock — no new number, no new feel.
-3. **Blues shuffle (6/8)** — a shuffle kick and backbeat snare on a 6-grid, a
-   ride on **sixths**; `6` locks onto the `2`-feel as a rolling triplet shuffle.
-4. **Cross-rhythm (world music)** — the 3-against-2 of West-African and
-   Afro-Cuban music (the 6/8 bell, the hemiola), where 2 and 3 share *no* factor
-   so they only meet once a bar, with a nod to clave/bossa syncopation.
-5. **4-against-5** — the dance/prog favourite: a four-on-the-floor beat with a
-   hook on 5, cut all the way to **twentieths** (LCM 20) so you *feel* how huge
-   the grid is; the same `4:5` is a sweet **major third** as a pitch.
+The lessons never do the maths *for* you — they're all feel and trial-and-error.
+You build grooves, then **cut the pieces until the lanes line up**, discovering
+the shared grid by ear rather than being told a number. (When you're curious
+about the actual numbers, the **Groove Lab** is one click away.)
 
-Every lesson makes you **cut every beat down to the shared grid** — you can't
-move on until both lanes actually meet at their LCM — so the maths is something
-you *do*, not just read. A lane stays **silent until it makes a full bar** (a
-muted block counts as a rest, and the missing amount is never spelled out), and
-**cutting a block mutes the new pieces**, so the groove holds while the finer
-grid is revealed.
+1. **Two against three** — stack a 2 and a 3, feel them pull, then cut until they
+   line up.
+2. **Rock (why it locks)** — a real kick/snare/hat beat; add a kick push, recut
+   the hats to match, and notice it barely changes — rock's parts all share an
+   easy grid, so it locks.
+3. **Blues shuffle** — a ba-bum kick and backbeat snare with a swung ride; the
+   triplet roll that makes the shuffle.
+4. **Ewe drumming (Ghana)** — a real West-African groove: a gankoguí bell in four,
+   an axatse shaker on the pulse, and a drum you set to three. Four and three
+   *weave* — the engine of West-African music and the 6/8 feels that grew from it.
+5. **Four against five** — a four-on-the-floor dance beat with a hook on five;
+   cut until they line up (it takes a *lot* of tiny pieces) and feel why it's so
+   restless. The same four-and-five as pitches is a sweet chord — try **Tones**.
+
+Throughout, a lane stays **silent until it makes a full bar** (a muted block
+counts as a rest, and the missing amount is never spelled out — that's the
+puzzle), you **can't skip a step until you've actually done it**, and **cutting a
+block mutes the new pieces**, so the groove holds while the finer grid appears.
 
 The **Groove Lab** is a popout (button in the toolbar, works in either mode).
 Pick any two numbers, or hit **Use my lanes**, and it live-computes:
