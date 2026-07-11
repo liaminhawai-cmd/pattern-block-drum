@@ -1373,27 +1373,29 @@ const LESSONS = [
       { voice: 0, name: 'Kick', blocks: [half('loud'), half('mid')] },
       { voice: 1, name: 'Snare', blocks: [q('mute'), half('loud'), q('loud')] },
       { voice: 3, name: 'Hi-hat' },
-      { voice: 5, name: 'Tom' },
+      { voice: 9, name: 'Shaker' },
     ]),
     steps: [
       { text: "Real music now. A <b>4/4 rock beat</b>: <b>kick</b> on the halves (beats 1 & 3), <b>snare</b> on the backbeat (2 & 4). ▶ Play it." },
       { text: "Add <b>hi-hats</b>: fill the Hi-hat lane with <b>eighths</b> (⅛).", done: () => laneAllUnit(2, 8) },
-      { text: "Busier — but the <b>same groove</b>, right? 2, 4 and 8 are all made of <b>2s</b>, so they share the eighth grid and <b>lock</b>. A detail that stays in the family doesn't change the feel, just the density." },
-      { text: "Now a detail that <i>does</i>: fill the <b>Tom</b> lane with <b>thirds</b> (⅓).", done: () => laneAllUnit(3, 3) },
-      { text: "Feel the pull? Thirds bring a factor of <b>3</b> the 2-grid never had, so the shared grid leaps (LCM jumps to 24). A detail that adds a <b>new prime</b> changes the <b>feel</b> — that's the line between 'busier' and 'a new groove'." },
+      { text: "Busier — but the <b>same groove</b>, right? 2, 4 and 8 are all made of <b>2s</b>, so they share the eighth grid and <b>lock</b>. Detail that stays in the family adds density, not a new feel." },
+      { text: "Now bring in a <b>triplet</b> bounce — the swing behind shuffle, gospel and trap: fill the <b>Shaker</b> lane with <b>thirds</b> (⅓).", done: () => laneAllUnit(3, 3) },
+      { text: "Feel it lean? Thirds add a factor of <b>3</b> the 2-grid never had, so it can't lock — the shared grid leaps (LCM jumps to 24) and the whole thing starts to <b>swing</b>. A detail with a <b>new prime</b> changes the feel; more 2s just add detail." },
     ],
   },
   {
     name: '3 · Blues shuffle (6/8)',
+    // Blues lives on a 6-grid. Kick = 2/6 · 1/6 · 3/6 (hits at 0, 2/6, 3/6);
+    // snare = a muted half then a half (backbeat at the midpoint).
     setup: () => tutLanes([
-      { voice: 0, name: 'Kick', blocks: [blk(1, 4, 'loud'), blk(1, 8, 'mute'), blk(1, 8, 'loud'), blk(1, 2, 'mute')] },
-      { voice: 1, name: 'Snare', blocks: [q('mute'), half('loud'), q('loud')] },
+      { voice: 0, name: 'Kick', blocks: [blk(1, 3, 'loud'), blk(1, 6, 'loud'), blk(1, 2, 'loud')] },
+      { voice: 1, name: 'Snare', blocks: [half('mute'), half('loud')] },
       { voice: 4, name: 'Ride' },
     ]),
     steps: [
-      { text: "A <b>blues shuffle</b>: a 'ba-bum' kick and a backbeat snare, felt 'in 2'. ▶ Play the bed." },
-      { text: "Add the <b>ride</b>: fill the Ride lane with <b>sixths</b> (⅙) — the shuffle's triplet roll.", done: () => laneAllUnit(2, 6) },
-      { text: "Hear it? <b>6 lines up with 2</b> (6 is a multiple of 2): the triplets land on and between the pulse, so it <b>locks</b> — but that subdivision is the rolling <b>shuffle</b> of blues and jazz. Same trick as the rock hats, funkier flavour." },
+      { text: "Blues lives in <b>6</b> — count 1-2-3-4-5-6, felt in two. Here's a shuffle <b>kick</b> and a backbeat <b>snare</b> on the 6-grid. ▶ Play the bed." },
+      { text: "Add the <b>ride</b>: fill it with <b>sixths</b> (⅙) — all six, the shuffle roll.", done: () => laneAllUnit(2, 6) },
+      { text: "The whole groove sits on the <b>6-grid</b>, and 6 lines up with the 2-feel (6 is a multiple of 2), so it <b>locks</b> into that rolling <b>shuffle</b>. A bigger family than the rock beat — funkier flavour, still no fight." },
     ],
   },
   {
@@ -1407,11 +1409,15 @@ const LESSONS = [
   },
   {
     name: '5 · 4-against-5 (dance & prog)',
-    setup: () => tutLanes([{ voice: 0, name: 'Four' }, { voice: 2, name: 'Five' }]),
+    setup: () => tutLanes([
+      { voice: 0, name: 'Kick', blocks: [q('loud'), q('loud'), q('loud'), q('loud')] },   // four on the floor
+      { voice: 2, name: 'Clap', blocks: [q('mute'), q('loud'), q('mute'), q('loud')] },     // backbeat
+      { voice: 11, name: 'Stab' },
+    ]),
     steps: [
-      { text: "Producers love <b>4-against-5</b> — you'll hear it in dance, footwork and prog, often <b>truncated</b> (the 5 hinted at, not fully spelled out)." },
-      { text: "Fill <b>Four</b> with four <b>¼</b> blocks and <b>Five</b> with five <b>⅕</b> blocks.", done: () => laneAllUnit(0, 4) && laneAllUnit(1, 5) },
-      { text: "▶ Play. To draw it exactly you'd cut everything into <b>twentieths</b> — LCM(4,5)=20, so it barely ever fully lines up: restless and hypnotic. Funny thing: as a <b>pitch</b>, 4:5 is a sweet <b>major third</b>. Same ratio, sold as tension in rhythm and sweetness in harmony. Flip <b>🎵 Tones</b> on and hear it." },
+      { text: "A <b>four-on-the-floor</b> dance beat: <b>kick</b> every quarter, <b>clap</b> on the backbeat. All 4s — rock solid and locked. ▶ Play." },
+      { text: "Now the producer's twist: a hook on <b>five</b>. Fill the <b>Stab</b> lane with <b>fifths</b> (⅕).", done: () => laneAllUnit(2, 5) },
+      { text: "Feel the tension breathe in and out? 4 and 5 share <b>no</b> factor (LCM 20), so the stab slides against the four-on-the-floor and only re-locks once a bar — restless, hypnotic, danceable. Producers often <b>truncate</b> the 5 (hint it, don't spell it out). And that same <b>4:5</b> is a sweet <b>major third</b> as a pitch — flip <b>🎵 Tones</b> and hear it." },
     ],
   },
   {
@@ -1446,8 +1452,11 @@ function renderTutorial() {
   $('#tutText').innerHTML = step.text;
   $('#tutPrev').disabled = state.lesson === 0 && state.step === 0;
   const atEnd = state.lesson === LESSONS.length - 1 && state.step === L.steps.length - 1;
+  // A step with a goal (`done`) can't be skipped until you actually pass it.
+  const gated = !!(step.done && !step.done());
+  $('#tutNext').disabled = gated;
   $('#tutNext').textContent = atEnd ? '↻ Start over' : (state.step === L.steps.length - 1 ? 'Next lesson ›' : 'Next ›');
-  $('#tutWaiting').hidden = !step.done;
+  $('#tutWaiting').hidden = !gated;
 }
 
 // Auto-advance within a lesson when the current step's goal is reached.
@@ -1461,6 +1470,8 @@ function maybeAdvanceTutorial() {
   }
 }
 function tutorialNext() {
+  const step = currentStep();
+  if (step && step.done && !step.done()) return;   // can't skip an unmet goal
   const L = currentLesson();
   if (state.step < L.steps.length - 1) { state.step++; renderTutorial(); }
   else if (state.lesson < LESSONS.length - 1) { enterLesson(state.lesson + 1); }
