@@ -1372,14 +1372,14 @@ const LESSONS = [
     setup: () => tutLanes([
       { voice: 0, name: 'Kick', blocks: [half('loud'), half('mid')] },
       { voice: 1, name: 'Snare', blocks: [q('mute'), half('loud'), q('loud')] },
-      { voice: 3, name: 'Hi-hat' },
+      { voice: 3, name: 'Hi-hat', blocks: [q('mid'), q('soft'), q('mid'), q('soft')] },
     ]),
     steps: [
-      { text: "Real music now. A <b>4/4 rock beat</b>: <b>kick</b> on the halves (beats 1 & 3), <b>snare</b> on the backbeat (2 & 4). ▶ Play it." },
-      { text: "Add <b>hi-hats</b>: fill the Hi-hat lane with <b>eighths</b> (⅛).", done: () => laneAllUnit(2, 8) },
-      { text: "Busier — but the <b>same groove</b>, right? Detail that stays in the family adds density, not a new feel." },
-      { text: "Prove it: <b>cut the Kick to the hats' grid</b> — cut each ½ so the whole Kick lane is <b>eighths</b> too.", done: () => laneAllUnit(0, 8) && laneAllUnit(2, 8) },
-      { text: "Everything lands on the <b>eighth grid</b> with room to spare — 2, 4 and 8 are all powers of <b>2</b>, so the shared grid is just <b>8</b> and they <b>lock</b>. That tight, four-square lock <i>is</i> the sound of rock. (Want a different feel? You need a new number — that's the next lessons.)" },
+      { text: "Real music now. The rock skeleton: <b>hi-hats</b> on straight <b>quarters</b>, <b>kick</b> on 1 & 3, <b>snare</b> on the backbeat (2 & 4). ▶ Play it." },
+      { text: "Try a finer grid: <b>cut the Snare into eighths</b> (⅛). Cut each block until the whole Snare lane is ⅛s.", done: () => laneAllUnit(1, 8) },
+      { text: "Hear it? <b>Identical.</b> Cutting mutes the new slices, so it just re-draws the same groove on a finer grid — a measuring lens, not a new sound (exactly how we lined up 2 and 3 back in Lesson 1). Eighths are still 2s." },
+      { text: "Now put the <b>whole kit on one grid</b>: cut the <b>Kick</b> and <b>Hi-hat</b> to eighths too.", done: () => laneAllUnit(0, 8) && laneAllUnit(2, 8) },
+      { text: "2, 4 and 8 are all powers of <b>2</b>, so they share the eighth grid and <b>lock</b> — that tight, four-square lock <i>is</i> rock. It never needed a new number. Change the number and you change the feel: that's the next lessons." },
     ],
   },
   {
