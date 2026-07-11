@@ -86,24 +86,36 @@ rhythm.
 ![The tutorial and Groove Lab in Learn mode](docs/learn-mode.png)
 
 Switch modes in the header. **Create** is the free-play sampler above, with no
-rules. **Learn** turns the app into a guided **tutorial**:
+rules. **Learn** turns the app into a guided **tutorial** — and it *remembers*
+your Create pattern, resetting the board for the lessons and handing it back when
+you switch out. It's a set of lessons you can step through or jump between:
 
-- It walks you step by step through building a **2-against-3 polyrhythm**, then
-  sets the puzzle — *cut the pieces until both lanes are made of the same size* —
-  so you discover, by ear and eye, that they meet at **sixths** (the LCM of 2
-  and 3). It doesn't tell you the missing gaps; you find them.
-- In Learn mode a lane stays **silent until it makes a full bar** (a muted block
-  counts as a rest), and **cutting a block mutes the new pieces** — so your
-  groove stays exactly where it was while the finer grid is revealed underneath.
+1. **Polyrhythm basics** — build a 2-against-3, then solve *cut the pieces until
+   both lanes are the same size* and discover they meet at **sixths** (the LCM).
+2. **Rock beat + hi-hats** — a real 4/4 kick-and-backbeat; add eighth-note hats
+   and see that because `8` is a multiple of `4` they **lock** — finer detail, no
+   cross-rhythm. That's why straight rock feels solid.
+3. **Blues shuffle (6/8)** — a half-note pulse with sixths over it; `6` lines up
+   with `2`, so it locks, but the triplet subdivision gives it that rolling swing.
+4. **Cross-rhythm (world music)** — the 3-against-2 that drives West-African and
+   Afro-Cuban music (the 6/8 bell, the hemiola), with a nod to clave/bossa
+   syncopation.
+5. **4-against-5** — the dance/prog favourite (LCM 20, so it's restless and often
+   *truncated*); the same `4:5` that's a sweet **major third** as a pitch.
+
+Throughout Learn mode, a lane stays **silent until it makes a full bar** (a muted
+block counts as a rest, and the missing amount is never spelled out — that's the
+puzzle), and **cutting a block mutes the new pieces**, so the groove holds while
+the finer grid is revealed.
 
 The **Groove Lab** is a popout (button in the toolbar, works in either mode).
 Pick any two numbers, or hit **Use my lanes**, and it live-computes:
 
 - their **HCF (GCD)** and **LCD (LCM)**, with a colour-coded prime factorization
   (the same colours as the wall);
-- a **funk level**, from 😌 *Locked* (one is a multiple of the other — no
-  polyrhythm) up to 🤯 *Deep funk*. Fewer shared factors ⇒ more slices to line
-  them up ⇒ funkier: 2-against-3 needs sixths, 3-against-5 needs fifteenths;
+- how they groove, judged by the reduced **LCM** and honest about the top end:
+  🔒 *Locked* → 🙂 *Classic cross-rhythm* → 😎 *Funky* → 🔥 *Deep funk* →
+  🌶️ *Knotty* → 🤯 *Dissonant* (past a point it's tension, not groove);
 - a plain-English explanation worked out from the shared factor;
 - **▶ Hear the polyrhythm** (the two numbers as a click pattern) and **🎵 Hear it
   as a pitch** (the same ratio as two sustained tones). It names the interval in

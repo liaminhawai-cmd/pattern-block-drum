@@ -115,7 +115,7 @@ const state = {
   playing: false,
   mode: 'create',   // 'create' (free play) or 'learn' (lanes gate on completeness, tutorial)
   tones: false,     // play the beat as pitched notes instead of drum samples
-  tutorialStep: 0,
+  lesson: 0, step: 0,   // tutorial position (Learn mode)
   lanes: [],
   denominators: Array.from({ length: ROWS }, (_, i) => i + 1),   // fraction-wall rows
 };
@@ -1235,16 +1235,25 @@ function clearAll() {
 }
 
 /* ------------------------------ mode: Create / Learn -------------------- */
+let createSnapshot = null;   // remembers the Create-mode pattern while in Learn
+
 function setMode(mode) {
-  state.mode = mode;
+  if (mode === state.mode) return;
+  if (mode === 'learn') {
+    createSnapshot = serialize();          // stash the free-play pattern
+    state.mode = 'learn';
+    enterLesson(state.lesson || 0);        // reset the board for the tutorial
+  } else {
+    state.mode = 'create';
+    if (createSnapshot) { deserialize(createSnapshot); createSnapshot = null; }   // bring it back
+    else { markDirty(); renderSeq(); }
+  }
   $('#modeCreate').classList.toggle('active', mode === 'create');
   $('#modeLearn').classList.toggle('active', mode === 'learn');
   $('#tutorialPanel').hidden = mode !== 'learn';
   $('#seqSub').textContent = mode === 'learn'
     ? 'Learn mode — a lane stays silent until it makes a full bar; cutting mutes the new pieces'
     : 'one bar per lane — blocks tile left to right, a muted block is a rest';
-  if (mode === 'learn') renderTutorial();
-  markDirty(); renderSeq();
 }
 
 function toggleTones() {
@@ -1262,49 +1271,134 @@ function laneAllUnit(li, den) {
   if (!lane || !lane.blocks.length || !laneComplete(lane)) return false;
   return lane.blocks.every((b) => { const r = reduce(b.n, b.d); return r.n === 1 && r.d === den; });
 }
+// Replace the lanes for a lesson setup (voice, name, blocks).
+function tutLanes(specs) {
+  laneSeq = 0;
+  state.lanes = specs.map((s) => {
+    const lane = newLane(s.voice, s.blocks || []);
+    if (s.name) lane.name = s.name;
+    return lane;
+  });
+  if (ctx) { state.lanes.forEach(ensureLaneNode); applyLaneGains(); }
+}
+const q = (face) => blk(1, 4, face);       // a quarter
+const half = (face) => blk(1, 2, face);    // a half
 
-const TUTORIAL = [
-  { title: 'Polyrhythms', manual: true,
-    text: "👋 Let's build a polyrhythm and find out why some grooves feel funkier than others. Hit <b>Next</b> to start." },
-  { title: 'A steady 2', done: () => laneAllUnit(0, 2),
-    text: "Make the <b>Kick</b> lane (the top one) hit <b>twice</b>: fill the whole bar with two <b>½</b> blocks. Clear it first if you need to (drag a block off the board to remove it)." },
-  { title: 'A steady 3', done: () => laneAllUnit(1, 3),
-    text: "Now the <b>Snare</b> lane: make it hit <b>three</b> times — fill it with <b>⅓</b> blocks." },
-  { title: '2 against 3', manual: true,
-    text: "▶ Press <b>Play</b>. Two beats pulling against three — a polyrhythm! They only meet at the very start of the bar. Hit <b>Next</b> when you've heard it." },
-  { title: 'Find the shared grid', done: () => laneAllUnit(0, 6) && laneAllUnit(1, 6),
-    text: "The puzzle: <b>cut the pieces until both lanes are made of the same size.</b> Right-click a block (or hover it and press a number) to cut it. In Learn mode the new pieces are muted, so your groove stays put. Keep going… what's the smallest size they can share?" },
-  { title: '🎉 Sixths!', manual: true, final: true,
-    text: "Both lines now sit on a grid of <b>6</b> — the smallest number 2 and 3 both divide into: their <b>LCM</b>. Fewer shared factors ⇒ more slices ⇒ funkier. Poke at 3-and-4 or 3-and-5 in the <b>Groove Lab</b> to feel the difference." },
+const LESSONS = [
+  {
+    name: '1 · Polyrhythm basics (2 vs 3)',
+    setup: () => tutLanes([{ voice: 0, name: 'Kick' }, { voice: 1, name: 'Snare' }]),
+    steps: [
+      { text: "👋 Let's build a <b>polyrhythm</b> — two rhythms at once — and find out why some grooves feel funkier than others." },
+      { text: "Fill the <b>Kick</b> lane so it hits <b>twice</b>: two <b>½</b> blocks, filling the whole bar.", done: () => laneAllUnit(0, 2) },
+      { text: "Now fill the <b>Snare</b> lane so it hits <b>three</b> times — three <b>⅓</b> blocks.", done: () => laneAllUnit(1, 3) },
+      { text: "▶ Press <b>Play</b>. Two against three! They only meet at the very start of the bar — that tug is the polyrhythm." },
+      { text: "The puzzle: <b>cut every piece until both lanes are the same size.</b> Right-click a block to cut it (the new pieces mute, so your groove stays). How small must they get to match?", done: () => laneAllUnit(0, 6) && laneAllUnit(1, 6) },
+      { text: "🎉 <b>Sixths!</b> 6 is the smallest number both 2 and 3 divide into — their <b>LCM</b>. That shared grid is where a polyrhythm 'resolves'." },
+    ],
+  },
+  {
+    name: '2 · Rock beat + hi-hats',
+    setup: () => tutLanes([
+      { voice: 0, name: 'Kick', blocks: [q('loud'), q('mute'), q('loud'), q('mute')] },
+      { voice: 1, name: 'Snare', blocks: [q('mute'), q('loud'), q('mute'), q('loud')] },
+      { voice: 3, name: 'Hi-hat' },
+    ]),
+    steps: [
+      { text: "Real music now. Here's a <b>4/4 rock beat</b>: kick on 1 & 3, snare on the backbeats 2 & 4 (both on <b>quarters</b>). ▶ Play it." },
+      { text: "Add <b>hi-hats</b>: fill the Hi-hat lane with <b>eighths</b> (⅛). Drag in ⅛ blocks, or place a quarter and cut it in two.", done: () => laneAllUnit(2, 8) },
+      { text: "Now three lanes share the <b>eighth-note grid</b>. But <b>8 is a multiple of 4</b> — the hats land exactly on and between the quarters. They <b>lock</b>: no cross-rhythm, just finer detail. That's why straight rock feels solid, not swung." },
+    ],
+  },
+  {
+    name: '3 · Blues shuffle (6/8)',
+    setup: () => tutLanes([
+      { voice: 0, name: 'Pulse', blocks: [half('loud'), half('loud')] },
+      { voice: 7, name: 'Ride' },
+    ]),
+    steps: [
+      { text: "A <b>blues shuffle</b> feels 'in 2' but rolls underneath. Here's the <b>½-note pulse</b> — the foot-tap. ▶ Play it." },
+      { text: "Now fill the <b>Ride</b> lane with <b>sixths</b> (⅙) — six even swung notes across the bar.", done: () => laneAllUnit(1, 6) },
+      { text: "Hear it? <b>6 lines up with 2</b> (6 is a multiple of 2): every ride note is either on the pulse or exactly between. It <b>locks</b> — but the triplet subdivision gives blues and jazz that rolling <b>shuffle</b> lope. Subdivision makes feel, not just polyrhythm." },
+    ],
+  },
+  {
+    name: '4 · Cross-rhythm (world music)',
+    setup: () => tutLanes([{ voice: 8, name: 'Bell (3)' }, { voice: 6, name: 'Feet (2)' }]),
+    steps: [
+      { text: "The <b>3-against-2</b> you met in Lesson 1 is the heartbeat of <b>West-African</b> and <b>Afro-Cuban</b> music — the 6/8 bell over a two-step." },
+      { text: "Fill <b>Bell (3)</b> with three <b>⅓</b> blocks, and <b>Feet (2)</b> with two <b>½</b> blocks.", done: () => laneAllUnit(0, 3) && laneAllUnit(1, 2) },
+      { text: "▶ Play. Dancers feel it flip between 'in 3' and 'in 2' — that shimmer is a <b>hemiola</b>. The <b>son clave</b> and bossa-nova patterns push it further with <b>syncopation</b>: accents that dodge the main pulse. Try muting/rotating single pieces to move the accents around." },
+    ],
+  },
+  {
+    name: '5 · 4-against-5 (dance & prog)',
+    setup: () => tutLanes([{ voice: 0, name: 'Four' }, { voice: 2, name: 'Five' }]),
+    steps: [
+      { text: "Producers love <b>4-against-5</b> — you'll hear it in dance, footwork and prog, often <b>truncated</b> (the 5 hinted at, not fully spelled out)." },
+      { text: "Fill <b>Four</b> with four <b>¼</b> blocks and <b>Five</b> with five <b>⅕</b> blocks.", done: () => laneAllUnit(0, 4) && laneAllUnit(1, 5) },
+      { text: "▶ Play. To draw it exactly you'd cut everything into <b>twentieths</b> — LCM(4,5)=20, so it barely ever fully lines up: restless and hypnotic. Funny thing: as a <b>pitch</b>, 4:5 is a sweet <b>major third</b>. Same ratio, sold as tension in rhythm and sweetness in harmony. Flip <b>🎵 Tones</b> on and hear it." },
+    ],
+  },
+  {
+    name: '6 · Explore',
+    setup: () => tutLanes([{ voice: 0, name: 'A' }, { voice: 1, name: 'B' }]),
+    steps: [
+      { text: "You've got the idea: <b>shared factors lock; coprime numbers cross</b>, and the bigger the <b>LCM</b>, the more it slides from funky toward pure tension. Open the <b>Groove Lab</b> and try any pair — 5-against-6, 7-against-8 — to feel where groove tips into dissonance. Sandbox is all yours." },
+    ],
+  },
 ];
 
+function currentLesson() { return LESSONS[state.lesson] || LESSONS[0]; }
+function currentStep() { return currentLesson().steps[state.step] || currentLesson().steps[0]; }
+
+function enterLesson(li, runSetup = true) {
+  state.lesson = Math.max(0, Math.min(LESSONS.length - 1, li));
+  state.step = 0;
+  if (runSetup && currentLesson().setup) currentLesson().setup();
+  markDirty(); renderSeq(); renderTutorial();
+}
+
 function renderTutorial() {
-  const i = state.tutorialStep;
-  const step = TUTORIAL[i] || TUTORIAL[0];
-  $('#tutStep').textContent = `Step ${i + 1} of ${TUTORIAL.length}`;
-  $('#tutTitle').textContent = step.title;
+  const L = currentLesson(), step = currentStep();
+  const sel = $('#tutLesson');
+  if (sel && sel.options.length !== LESSONS.length) {
+    sel.innerHTML = LESSONS.map((l, i) => `<option value="${i}">${l.name}</option>`).join('');
+  }
+  if (sel) sel.value = state.lesson;
+  $('#tutStep').textContent = `Step ${state.step + 1} of ${L.steps.length}`;
+  $('#tutTitle').textContent = L.name.replace(/^\d+ · /, '');
   $('#tutText').innerHTML = step.text;
-  $('#tutPrev').disabled = i === 0;
-  $('#tutNext').textContent = step.final ? '↻ Restart' : 'Next ›';
+  $('#tutPrev').disabled = state.lesson === 0 && state.step === 0;
+  const atEnd = state.lesson === LESSONS.length - 1 && state.step === L.steps.length - 1;
+  $('#tutNext').textContent = atEnd ? '↻ Start over' : (state.step === L.steps.length - 1 ? 'Next lesson ›' : 'Next ›');
   $('#tutWaiting').hidden = !step.done;
 }
 
-// Auto-advance when the current step's goal is reached (called after edits).
+// Auto-advance within a lesson when the current step's goal is reached.
 function maybeAdvanceTutorial() {
   if (state.mode !== 'learn') return;
-  const step = TUTORIAL[state.tutorialStep];
-  if (step && step.done && step.done() && state.tutorialStep < TUTORIAL.length - 1) {
-    state.tutorialStep++;
+  const L = currentLesson(), step = currentStep();
+  if (step && step.done && step.done() && state.step < L.steps.length - 1) {
+    state.step++;
     renderTutorial();
     toast('Nice! ✓');
   }
 }
 function tutorialNext() {
-  const step = TUTORIAL[state.tutorialStep];
-  state.tutorialStep = step && step.final ? 0 : Math.min(TUTORIAL.length - 1, state.tutorialStep + 1);
-  renderTutorial();
+  const L = currentLesson();
+  if (state.step < L.steps.length - 1) { state.step++; renderTutorial(); }
+  else if (state.lesson < LESSONS.length - 1) { enterLesson(state.lesson + 1); }
+  else { enterLesson(0); }
 }
-function tutorialPrev() { state.tutorialStep = Math.max(0, state.tutorialStep - 1); renderTutorial(); }
+function tutorialPrev() {
+  if (state.step > 0) { state.step--; renderTutorial(); }
+  else if (state.lesson > 0) { state.lesson--; state.step = currentLesson().steps.length - 1; renderTutorial(); }
+}
+
+/* ------------------------------ Groove Lab popout ---------------------- */
+function openLab() { updateLab(); $('#labModal').hidden = false; }
+function closeLab() { stopLabGroove(); stopLabTone(); $('#labModal').hidden = true; }
 
 /* ------------------------------ Groove Lab popout ---------------------- */
 function openLab() { updateLab(); $('#labModal').hidden = false; }
@@ -1342,14 +1436,20 @@ function nameInterval(a, b) {
   if (octaves === 0) return base;
   return `${base} + ${octaves} octave${octaves > 1 ? 's' : ''}`;
 }
-const FUNK_LEVELS = [
-  { max: 1, label: '😌 Locked — no polyrhythm, one nests inside the other' },
-  { max: 2, label: '🙂 Classic polyrhythm' },
-  { max: 3, label: '😏 Deeper groove' },
-  { max: 4, label: '😎 Funky' },
-  { max: Infinity, label: '🤯 Deep funk' },
-];
-function funkLevel(score) { return FUNK_LEVELS.find((f) => score <= f.max).label; }
+// How a pair grooves, judged by its reduced LCM (the number of even slices you'd
+// need to draw the cross-rhythm). Small = locks/simple, big = tips into dissonance.
+// Honest about the top end: past a point it's tension, not funk.
+function grooveDescriptor(a, b) {
+  if (a === b) return '⚪ Unison — the very same pulse';
+  const g = gcd(a, b);
+  if (g === Math.min(a, b)) return '🔒 Locked — one nests inside the other, no cross-rhythm';
+  const lcm = (a / g) * (b / g);          // reduced LCM
+  if (lcm <= 6) return '🙂 Classic cross-rhythm';
+  if (lcm <= 12) return '😎 Funky';
+  if (lcm <= 20) return '🔥 Deep funk';
+  if (lcm <= 40) return '🌶️ Knotty — more tension than groove';
+  return '🤯 Dissonant — chaotic, hard to feel as a beat';
+}
 
 function factCard(n) {
   const factors = [...primeFactorize(n)];
@@ -1370,13 +1470,12 @@ function updateLab() {
   const { a, b } = labValues();
   const g = gcd(a, b);
   const lcm = (a * b) / g;
-  const score = Math.min(a, b) / g;
 
   $('#labFactA').innerHTML = factCard(a);
   $('#labFactB').innerHTML = factCard(b);
   $('#labGcd').textContent = g;
   $('#labLcm').textContent = lcm;
-  $('#labFunk').textContent = funkLevel(score);
+  $('#labFunk').textContent = grooveDescriptor(a, b);
 
   let explain;
   if (a === b) {
@@ -1498,6 +1597,7 @@ function wireControls() {
   $('#tonesToggle').addEventListener('click', toggleTones);
   $('#tutPrev').addEventListener('click', tutorialPrev);
   $('#tutNext').addEventListener('click', tutorialNext);
+  $('#tutLesson').addEventListener('change', (e) => enterLesson(+e.target.value));
   $('#openLab').addEventListener('click', openLab);
   $('#grooveLabBtn').addEventListener('click', openLab);
   $('#labA').addEventListener('input', updateLab);
