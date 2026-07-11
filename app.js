@@ -514,7 +514,9 @@ function renderPalette() {
       b.style.setProperty('--c', denColor(den));
       b.draggable = true;
       b.dataset.n = 1; b.dataset.d = den;
-      b.innerHTML = den === 1 ? '1' : `<span>1&frasl;${den}</span>`;
+      // Every wall block is a unit fraction, so the "1/" is implied — just show
+      // the denominator. Keeps labels legible even when a row has many columns.
+      b.innerHTML = den === 1 ? '1' : `<span>${den}</span>`;
       b.title = den === 1 ? 'A whole bar — click to arm, or drag' : `A 1/${den} block — click to arm, or drag into a lane`;
       b.addEventListener('click', () => setArmed(1, den));
       b.addEventListener('dragstart', (e) => {

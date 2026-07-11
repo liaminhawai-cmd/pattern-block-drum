@@ -22,13 +22,25 @@ html, body {
 }
 
 #app {
-  max-width: 1180px;
+  max-width: min(1180px, 96vw);
   margin: 0 auto;
   padding: 18px 20px 28px;
   display: flex;
   flex-direction: column;
   gap: 14px;
   min-height: 100vh;
+}
+/* Wide screens: let the app use the extra width instead of centering a
+   fixed-width column, so the two-panel layout below has room to sit
+   side by side rather than stacking and forcing a tall page. */
+@media (min-width: 1300px) { #app { max-width: min(1680px, 96vw); } }
+
+main { display: flex; flex-direction: column; gap: 14px; }
+.board-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+@media (min-width: 1300px) {
+  main { flex-direction: row; align-items: flex-start; }
+  .board-col { flex: 0 0 440px; }
+  .seq-wrap { flex: 1 1 0; min-width: 0; }
 }
 
 /* ---------- Top bar ---------- */
@@ -102,7 +114,7 @@ input[type=range]::-moz-range-thumb {
 .panel {
   background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px;
 }
-.section-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.section-head { display: flex; align-items: baseline; gap: 6px 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .section-title { font-size: 13px; font-weight: 700; letter-spacing: .3px; }
 .section-sub { font-size: 11px; color: var(--muted); }
 

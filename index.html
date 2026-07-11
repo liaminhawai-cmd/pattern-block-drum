@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pattern Block Drum Machine</title>
   <meta name="description" content="Grab fraction blocks from the wall and slide them into a sampler sequencer. Rotate block faces for dynamics, subdivide beats." />
-  <link rel="stylesheet" href="styles.css?v=9" />
+  <link rel="stylesheet" href="styles.css?v=10" />
 </head>
 <body>
   <div id="app">
@@ -58,49 +58,51 @@
     </header>
 
     <main>
-      <section class="panel palette-wrap">
-        <div class="section-head">
-          <span class="section-title">Fraction wall</span>
-          <span class="section-sub">drag a block into a lane — or click to arm it</span>
-          <span id="brushInfo" class="brush-info">Click a block to arm it, or drag</span>
-        </div>
-        <div id="palette" class="palette" aria-label="Fraction block palette"></div>
-      </section>
-
-      <section class="panel lab-wrap" id="labPanel" hidden>
-        <div class="section-head">
-          <span class="section-title">🎓 Groove Lab</span>
-          <span class="section-sub">pick two numbers and see how they groove together</span>
-          <button id="labUseLanes" class="btn btn-sm" title="Fill in from two lanes you've built">Use my lanes</button>
-        </div>
-        <div class="lab-body">
-          <div class="lab-inputs">
-            <label>A <input id="labA" type="number" min="1" max="32" value="2" /></label>
-            <span class="lab-vs">against</span>
-            <label>B <input id="labB" type="number" min="1" max="32" value="3" /></label>
+      <div class="board-col">
+        <section class="panel palette-wrap">
+          <div class="section-head">
+            <span class="section-title">Fraction wall</span>
+            <span class="section-sub">drag a block into a lane — or click to arm it</span>
+            <span id="brushInfo" class="brush-info">Click a block to arm it, or drag</span>
           </div>
+          <div id="palette" class="palette" aria-label="Fraction block palette"></div>
+        </section>
 
-          <div class="lab-math">
-            <div id="labFactA" class="lab-fact"></div>
-            <span class="lab-op">×</span>
-            <div id="labFactB" class="lab-fact"></div>
+        <section class="panel lab-wrap" id="labPanel" hidden>
+          <div class="section-head">
+            <span class="section-title">🎓 Groove Lab</span>
+            <span class="section-sub">pick two numbers and see how they groove together</span>
+            <button id="labUseLanes" class="btn btn-sm" title="Fill in from two lanes you've built">Use my lanes</button>
           </div>
+          <div class="lab-body">
+            <div class="lab-inputs">
+              <label>A <input id="labA" type="number" min="1" max="32" value="2" /></label>
+              <span class="lab-vs">against</span>
+              <label>B <input id="labB" type="number" min="1" max="32" value="3" /></label>
+            </div>
 
-          <div class="lab-results">
-            <div class="lab-stat"><span class="lab-stat-label">HCF (GCD)</span><span id="labGcd" class="lab-stat-val"></span></div>
-            <div class="lab-stat"><span class="lab-stat-label">LCD (LCM)</span><span id="labLcm" class="lab-stat-val"></span></div>
-            <div class="lab-stat"><span class="lab-stat-label">Funk level</span><span id="labFunk" class="lab-stat-val"></span></div>
+            <div class="lab-math">
+              <div id="labFactA" class="lab-fact"></div>
+              <span class="lab-op">×</span>
+              <div id="labFactB" class="lab-fact"></div>
+            </div>
+
+            <div class="lab-results">
+              <div class="lab-stat"><span class="lab-stat-label">HCF (GCD)</span><span id="labGcd" class="lab-stat-val"></span></div>
+              <div class="lab-stat"><span class="lab-stat-label">LCD (LCM)</span><span id="labLcm" class="lab-stat-val"></span></div>
+              <div class="lab-stat"><span class="lab-stat-label">Funk level</span><span id="labFunk" class="lab-stat-val"></span></div>
+            </div>
+
+            <p id="labExplain" class="lab-explain"></p>
+
+            <div class="lab-row">
+              <button id="labPlayGroove" class="btn">▶ Hear the polyrhythm</button>
+              <button id="labPlayTone" class="btn">🎵 Hear it as a pitch</button>
+              <span id="labInterval" class="lab-interval-name"></span>
+            </div>
           </div>
-
-          <p id="labExplain" class="lab-explain"></p>
-
-          <div class="lab-row">
-            <button id="labPlayGroove" class="btn">▶ Hear the polyrhythm</button>
-            <button id="labPlayTone" class="btn">🎵 Hear it as a pitch</button>
-            <span id="labInterval" class="lab-interval-name"></span>
-          </div>
-        </div>
-      </section>
+        </section>
+      </div>
 
       <section class="panel seq-wrap">
         <div class="section-head">
@@ -204,6 +206,6 @@
   <input id="fileInput" type="file" accept="audio/*" hidden />
   <input id="jsonInput" type="file" accept="application/json,.json" hidden />
 
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>
