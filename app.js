@@ -756,11 +756,15 @@ function subdivide(li, bi, k) {
   pushUndo();
   const lane = state.lanes[li];
   const b = lane.blocks[bi];
-  // In Learn mode, cutting keeps only the first piece sounding and mutes the
-  // rest — so the audible groove is unchanged while the finer grid is revealed
-  // (the point of "cut the pieces so they're all the same size").
+  // In Learn mode, cutting normally keeps only the first piece sounding and
+  // mutes the rest — so the audible groove is unchanged while the finer grid
+  // is revealed. A lane can opt out (lane.keepFaceOnCut) for the rare lesson
+  // where the point is the opposite: that a finer grid still sounds the same
+  // when every piece stays audible (e.g. hi-hats you're re-measuring, not
+  // re-composing).
+  const mutesNewPieces = state.mode === 'learn' && !lane.keepFaceOnCut;
   const pieces = Array.from({ length: k }, (_, i) =>
-    blk(b.n, b.d * k, (state.mode === 'learn' && i > 0) ? 'mute' : b.face));
+    blk(b.n, b.d * k, (mutesNewPieces && i > 0) ? 'mute' : b.face));
   lane.blocks.splice(bi, 1, ...pieces);
   // a new size like 1/15 may not be on the wall yet — add it and reflow
   if (registerFraction(pieces[0])) renderPalette();
@@ -770,6 +774,19 @@ function subdivide(li, bi, k) {
 function mergeWithNext(li, bi) {
   const lane = state.lanes[li];
   if (bi >= lane.blocks.length - 1) { toast('Nothing after this block to merge'); return; }
+  // In Learn mode, merging on a lane that's matched-but-overshot the true
+  // grid is the "aha" moment — finish simplifying every tracked lane for them
+  // rather than making them merge every single piece by hand.
+  if (state.mode === 'learn') {
+    const step = currentStep();
+    if (step && step.matchLanes && step.matchLanes.includes(li)
+        && cutMatchState(step.matchLanes, step.matchTarget) === 'overshoot') {
+      pushUndo();
+      autoFixOvershoot(step.matchLanes, step.matchTarget);
+      toast('Nice — that\'s the idea. Simplified the rest to match! ✓');
+      return;
+    }
+  }
   pushUndo();
   const a = lane.blocks[bi], b = lane.blocks[bi + 1];
   const n = a.n * b.d + b.n * a.d;
@@ -1179,7 +1196,7 @@ function snapshotState() {
     denominators: state.denominators.slice(),
     lanes: state.lanes.map((l) => ({
       id: l.id, name: l.name, voice: l.voice, gain: l.gain, muted: l.muted, solo: l.solo,
-      midi: l.midi, buffer: l.buffer,
+      midi: l.midi, buffer: l.buffer, keepFaceOnCut: l.keepFaceOnCut,
       blocks: l.blocks.map((b) => ({ n: b.n, d: b.d, face: b.face })),
     })),
   };
@@ -1192,6 +1209,7 @@ function restoreState(snap) {
     const lane = newLane(s.voice, s.blocks.map((b) => blk(b.n, b.d, b.face)));
     lane.id = s.id; lane.name = s.name; lane.gain = s.gain; lane.muted = s.muted;
     lane.solo = s.solo; lane.midi = s.midi; lane.buffer = s.buffer || null;
+    lane.keepFaceOnCut = !!s.keepFaceOnCut;
     return lane;
   });
   laneSeq = state.lanes.reduce((m, l) => Math.max(m, l.id), laneSeq);
@@ -1355,12 +1373,47 @@ function lanesMatch(...indices) {
   const ks = indices.map(laneUnit);
   return ks.every((k) => k) && new Set(ks).size === 1;
 }
-// Replace the lanes for a lesson setup (voice, name, blocks).
+// A lane's audible pattern once it's uniformly 1/den pieces — one bool per
+// slot — or null if it isn't there yet. Used to check an exact built pattern
+// (e.g. "hits on 1, 3, 4, 6") without caring which face (loud/mid/soft) was used.
+function laneOnsets(li, den) {
+  if (!laneAllUnit(li, den)) return null;
+  return state.lanes[li].blocks.map((b) => b.face !== 'mute');
+}
+// 'incomplete' — lanes aren't all uniform, or don't match each other yet.
+// 'overshoot'  — they match, but at a grid finer than the true minimal one.
+// 'correct'    — they match exactly at target.
+// (Any common grid the lanes reach is guaranteed to be a whole multiple of
+// their true LCM, so checking k % target is exact, not a heuristic.)
+function cutMatchState(indices, target) {
+  const ks = indices.map(laneUnit);
+  if (!ks.every((k) => k) || new Set(ks).size !== 1) return 'incomplete';
+  return ks[0] === target ? 'correct' : 'overshoot';
+}
+// Once a kid has proven they get it (matched at a finer grid than needed) and
+// starts merging pieces back down, finish the simplification for every
+// tracked lane in one go instead of making them merge every single piece.
+function autoFixOvershoot(indices, target) {
+  for (const li of indices) {
+    const lane = state.lanes[li];
+    const k = laneUnit(li);
+    const m = k / target;
+    const collapsed = [];
+    for (let i = 0; i < target; i++) {
+      const group = lane.blocks.slice(i * m, i * m + m);
+      collapsed.push(blk(1, target, group.some((b) => b.face !== 'mute') ? 'loud' : 'mute'));
+    }
+    lane.blocks = collapsed;
+  }
+  markDirty(); renderSeq();
+}
+// Replace the lanes for a lesson setup (voice, name, blocks, keepFaceOnCut).
 function tutLanes(specs) {
   laneSeq = 0;
   state.lanes = specs.map((s) => {
     const lane = newLane(s.voice, s.blocks || []);
     if (s.name) lane.name = s.name;
+    lane.keepFaceOnCut = !!s.keepFaceOnCut;
     return lane;
   });
   if (ctx) { state.lanes.forEach(ensureLaneNode); applyLaneGains(); }
@@ -1377,37 +1430,45 @@ const LESSONS = [
       { text: "Make the <b>Kick</b> hit <b>twice</b>: fill the bar with two <b>½</b> blocks.", done: () => laneAllUnit(0, 2) },
       { text: "Make the <b>Snare</b> hit <b>three</b> times: fill it with three <b>⅓</b> blocks.", done: () => laneAllUnit(1, 3) },
       { text: "▶ Press <b>Play</b>. Two against three — hear how they pull, meeting only at the very start of the bar? That tug is the polyrhythm." },
-      { text: "Now the puzzle: <b>cut the pieces until both lanes are made of the same size and every hit lines up.</b> Right-click a block to cut it — the new pieces mute, so your groove stays. Trial and error: how small do they need to get?", done: () => lanesMatch(0, 1) },
+      {
+        text: "Now the puzzle: <b>cut the pieces until both lanes are made of the same size and every hit lines up.</b> Right-click a block to cut it — the new pieces mute, so your groove stays. Trial and error: how small do they need to get?",
+        matchLanes: [0, 1], matchTarget: 6,
+        done: () => cutMatchState([0, 1], 6) === 'correct',
+      },
       { text: "🎉 They line up! There's a grid where the two rhythms finally agree. <i>(Curious what size that is, and why? Open the <b>Groove Lab</b> — it does the maths for you.)</i>" },
     ],
   },
   {
     name: '2 · Rock (why it locks)',
     setup: () => tutLanes([
-      { voice: 0, name: 'Kick', blocks: [half('loud'), q('loud'), blk(1, 8, 'mute'), blk(1, 8, 'mute')] },
+      { voice: 0, name: 'Kick', blocks: [half('loud'), half('mute')] },
       { voice: 1, name: 'Snare', blocks: [q('mute'), half('loud'), q('loud')] },
-      { voice: 3, name: 'Hi-hat', blocks: [q('mid'), q('soft'), q('mid'), q('soft')] },
+      { voice: 3, name: 'Hi-hat', blocks: [q('mid'), q('soft'), q('mid'), q('soft')], keepFaceOnCut: true },
     ]),
     steps: [
-      { text: "The rock skeleton: <b>hi-hats</b> on straight quarters, <b>kick</b> on 1 & 3, <b>snare</b> on the backbeat. ▶ Play it." },
-      { text: "Give the kick a <b>push</b>: click the last little Kick slice (far right, greyed-out) to turn it up — a kick that lands just before beat 1 comes round again.", done: () => state.lanes[0].blocks.some((b) => { const r = reduce(b.n, b.d); return r.d === 8 && b.face !== 'mute'; }) },
-      { text: "That push is a smaller slice than the hats. <b>Recut the hi-hats until they match it</b> — cut each hat until they line up with the kick's smallest piece.", done: () => laneAllUnit(2, 8) },
+      { text: "The rock skeleton: <b>hi-hats</b> on straight quarters, <b>kick</b> on beat 1, <b>snare</b> on the backbeat. ▶ Play it." },
+      { text: "Give the kick a <b>push</b>: right-click that silent second half and cut it into <b>4</b> — then click one of the new slivers to bring it in, a quick kick right before the beat comes back around.", done: () => state.lanes[0].blocks.some((b) => { const r = reduce(b.n, b.d); return r.d === 8 && b.face !== 'mute'; }) },
+      { text: "That push is a smaller slice than the hats. <b>Recut the hi-hats to match it</b> — cut each hat until they're the same tiny size as the kick's push.", done: () => laneAllUnit(2, 8) },
       { text: "Doesn't sound super different, does it? The hats just fill in around the same groove. In rock everything shares one easy grid, so it all <b>locks</b> — that tight, four-square lock <i>is</i> the sound. To change the feel you need a different kind of number… next lessons." },
     ],
   },
   {
     name: '3 · Blues shuffle',
-    // Kick sounds on the 6-grid at 1,3,4,5,6 (position 2 held silent inside the
-    // opening 1/3 block); snare is a muted half then a half (backbeat midpoint).
     setup: () => tutLanes([
-      { voice: 0, name: 'Kick', blocks: [blk(1, 3, 'loud'), blk(1, 6, 'loud'), blk(1, 6, 'loud'), blk(1, 6, 'loud'), blk(1, 6, 'loud')] },
+      { voice: 0, name: 'Kick', blocks: [blk(1, 1, 'loud')] },
       { voice: 1, name: 'Snare', blocks: [half('mute'), half('loud')] },
       { voice: 4, name: 'Ride' },
     ]),
     steps: [
-      { text: "A <b>blues shuffle</b>, felt in two but rolling underneath. Here's a ba-bum <b>kick</b> and a backbeat <b>snare</b>. ▶ Play the bed." },
+      { text: "A <b>blues shuffle</b>, felt in two but rolling underneath. Here's the backbeat <b>snare</b> — now let's build the kick." },
+      { text: "Right-click the <b>Kick</b> block and cut it into <b>6</b>. Then click the 1st, 3rd, 4th and 6th pieces to bring them back in — leave the 2nd and 5th silent. That's the ba-bum bounce.", done: () => JSON.stringify(laneOnsets(0, 6)) === JSON.stringify([true, false, true, true, false, true]) },
+      { text: "▶ Play it — that shuffle kick against the backbeat." },
       { text: "Add the <b>ride</b> roll: fill it with <b>sixths</b> (⅙) — six even swung notes.", done: () => laneAllUnit(2, 6) },
-      { text: "Now <b>cut the Kick and Snare until every lane lines up</b> with the ride — trial and error until they're all the same size.", done: () => lanesMatch(0, 1, 2) },
+      {
+        text: "Now <b>cut everything until every lane lines up</b> with the ride — trial and error until they're all the same size.",
+        matchLanes: [0, 1, 2], matchTarget: 6,
+        done: () => cutMatchState([0, 1, 2], 6) === 'correct',
+      },
       { text: "Everything sits together, but that rolling triplet subdivision is the <b>shuffle</b> — the lope of blues and jazz. A bigger family than rock, funkier flavour, still no fight. <i>(Groove Lab if you want the numbers.)</i>" },
     ],
   },
@@ -1423,7 +1484,11 @@ const LESSONS = [
     steps: [
       { text: "Ewe drumming from <b>Ghana</b>. The <b>bell</b> (gankoguí) keeps a steady four and the <b>shaker</b> (axatse) fills the pulse. ▶ Play." },
       { text: "Add the <b>drum</b> across the top: make it hit <b>three</b> even times.", done: () => laneAllUnit(1, 3) },
-      { text: "Feel it breathe? The bell's four and the drum's three lean on each other, agreeing only here and there. <b>Cut the Bell and Drum until everything lines up</b> — keep cutting and listening till they match.", done: () => lanesMatch(0, 1, 2) },
+      {
+        text: "Feel it breathe? The bell's four and the drum's three lean on each other, agreeing only here and there. <b>Cut the Bell and Drum until everything lines up</b> — keep cutting and listening till they match.",
+        matchLanes: [0, 1, 2], matchTarget: 12,
+        done: () => cutMatchState([0, 1, 2], 12) === 'correct',
+      },
       { text: "There's the shared grid — but the four and the three still <i>weave</i>, and that weave is the engine of West-African drumming and every 6/8 groove that grew from it: Afro-Cuban, jazz, gospel. Rock locked; this one dances." },
     ],
   },
@@ -1437,7 +1502,11 @@ const LESSONS = [
     steps: [
       { text: "A <b>four-on-the-floor</b> dance beat: <b>kick</b> every quarter, <b>clap</b> on the backbeat. Rock-solid. ▶ Play." },
       { text: "Now the producer's twist: fill the <b>Stab</b> lane so it hits <b>five</b> even times.", done: () => laneAllUnit(2, 5) },
-      { text: "Hear it slide? Four and five almost never agree. <b>Cut the Kick and the Stab until they finally line up</b> — fair warning, it takes a <i>lot</i> of tiny pieces.", done: () => lanesMatch(0, 2) },
+      {
+        text: "Hear it slide? Four and five almost never agree. <b>Cut the Kick and the Stab until they finally line up</b> — fair warning, it takes a <i>lot</i> of tiny pieces.",
+        matchLanes: [0, 2], matchTarget: 20,
+        done: () => cutMatchState([0, 2], 20) === 'correct',
+      },
       { text: "Look how fine you had to cut before they matched — that's <i>why</i> it feels restless and hypnotic, and so danceable. Producers often just hint the five instead of spelling it out. And that same four-and-five, played as two pitches, is one of the sweetest chords there is — flip <b>🎵 Tones</b> and hear it." },
     ],
   },
@@ -1478,6 +1547,11 @@ function renderTutorial() {
   $('#tutNext').disabled = gated;
   $('#tutNext').textContent = atEnd ? '↻ Start over' : (state.step === L.steps.length - 1 ? 'Next lesson ›' : 'Next ›');
   $('#tutWaiting').hidden = !gated;
+  let waitingText = 'waiting for you to try it…';
+  if (gated && step.matchLanes && cutMatchState(step.matchLanes, step.matchTarget) === 'overshoot') {
+    waitingText = "you've matched — but there's a smaller way to draw this. Merge a couple of pieces back together to simplify.";
+  }
+  $('#tutWaiting').innerHTML = `<span class="tut-dot"></span> ${waitingText}`;
 }
 
 // Auto-advance within a lesson when the current step's goal is reached.
@@ -1486,9 +1560,12 @@ function maybeAdvanceTutorial() {
   const L = currentLesson(), step = currentStep();
   if (step && step.done && step.done() && state.step < L.steps.length - 1) {
     state.step++;
-    renderTutorial();
     toast('Nice! ✓');
   }
+  // Always refresh — not just on advance — so the Next button and the
+  // overshoot hint stay accurate after every edit, even ones that don't
+  // finish the step.
+  renderTutorial();
 }
 function tutorialNext() {
   const step = currentStep();

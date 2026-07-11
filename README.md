@@ -113,6 +113,9 @@ Throughout, a lane stays **silent until it makes a full bar** (a muted block
 counts as a rest, and the missing amount is never spelled out — that's the
 puzzle), you **can't skip a step until you've actually done it**, and **cutting a
 block mutes the new pieces**, so the groove holds while the finer grid appears.
+Cutting further than needed doesn't sneak past, either — if you overshoot, the
+tutorial notices and nudges you to merge a couple of pieces back together; merge
+just one and it tidies up the rest for you.
 
 The **Groove Lab** is a popout (button in the toolbar, works in either mode).
 Pick any two numbers, or hit **Use my lanes**, and it live-computes:
