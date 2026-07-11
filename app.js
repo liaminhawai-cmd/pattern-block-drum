@@ -137,18 +137,14 @@ function registerAllFractions() {
 function seedDefault() {
   laneSeq = 0;
   state.lanes = [
-    // Kick: four on the floor
-    newLane(0, [blk(1, 4, 'loud'), blk(1, 4, 'mid'), blk(1, 4, 'loud'), blk(1, 4, 'mid')]),
-    // Snare: backbeat on 2 & 4 (muted blocks = rests holding the time)
-    newLane(1, [blk(1, 4, 'mute'), blk(1, 4, 'loud'), blk(1, 4, 'mute'), blk(1, 4, 'loud')]),
-    // Closed hat: eighths, alternating soft/mid
-    newLane(3, Array.from({ length: 8 }, (_, i) => blk(1, 8, i % 2 ? 'mid' : 'soft'))),
-    // Conga: fifths, with the middle fifth cut into 3 (1/15 flam) — shows subdivision
-    newLane(6, [
-      blk(1, 5, 'mid'), blk(1, 5, 'soft'),
-      blk(1, 15, 'loud'), blk(1, 15, 'soft'), blk(1, 15, 'soft'),
-      blk(1, 5, 'soft'), blk(1, 5, 'mid'),
-    ]),
+    // Kick: mostly halves — beat 1 (a full half), beat 3, plus one extra
+    // syncopated kick on the "and" of 4 (the last half split down to eighths).
+    newLane(0, [blk(1, 2, 'loud'), blk(1, 4, 'loud'), blk(1, 8, 'mute'), blk(1, 8, 'loud')]),
+    // Snare: halves, first one silent — a halftime backbeat, hit only on beat 3.
+    newLane(1, [blk(1, 2, 'mute'), blk(1, 2, 'loud')]),
+    // Closed hat: steady quarters, with the last quarter split into eighths
+    // for one extra hat right before the loop comes back around.
+    newLane(3, [blk(1, 4, 'soft'), blk(1, 4, 'mid'), blk(1, 4, 'soft'), blk(1, 8, 'mid'), blk(1, 8, 'loud')]),
   ];
 }
 seedDefault();
