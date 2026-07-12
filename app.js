@@ -1849,6 +1849,19 @@ function init() {
   wireControls();
   renderTutorial();
   refreshMidiUI();
+
+  // The plain sampler (index.html, no query) shows no trace of Learn mode —
+  // no toggle, no Groove Lab, no mention in Help. Arriving via ?mode=learn
+  // (learn.html redirects here) reveals all of that and boots straight into
+  // the tutorial, with a link back to the clean sampler URL.
+  if (new URLSearchParams(location.search).get('mode') === 'learn') {
+    $('#backToMain').hidden = false;
+    $('.mode-toggle').hidden = false;
+    $('#grooveLabBtn').hidden = false;
+    document.querySelectorAll('.help-learn').forEach((el) => { el.hidden = false; });
+    setMode('learn');
+  }
+
   requestAnimationFrame(tickPlayhead);
 }
 document.addEventListener('DOMContentLoaded', init);

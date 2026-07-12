@@ -17,6 +17,10 @@ block's colour is always the same on the wall and in a lane.
 
 ![fraction wall + sequencer](docs/screenshot.png)
 
+Two pages: **`index.html`** is the plain sampler above. **`learn.html`** is a
+guided tutorial that builds on the same engine — see [Learn mode](#-learn-mode)
+below.
+
 ## Run it
 
 It's a single static page — no build step, no dependencies.
@@ -85,10 +89,18 @@ rhythm.
 
 ![The tutorial and Groove Lab in Learn mode](docs/learn-mode.png)
 
-Switch modes in the header. **Create** is the free-play sampler above, with no
-rules. **Learn** turns the app into a guided **tutorial** — and it *remembers*
-your Create pattern, resetting the board for the lessons and handing it back when
-you switch out. It's a set of lessons you can step through or jump between:
+The plain sampler above (`index.html`) never mentions Learn mode at all — it's
+a clean, standalone drum machine. The tutorial lives at its own URL,
+**`learn.html`**, which drops you straight into lesson 1 and adds a **← Sampler**
+link back to the plain page, plus the Create/Learn toggle so you can switch
+freely once you're there. (Under the hood `learn.html` just redirects to
+`index.html?mode=learn`, which is what actually decides what to show — no
+duplicated markup between the two.)
+
+**Create** is the free-play sampler, no rules. **Learn** turns the app into a
+guided **tutorial** — and it *remembers* your Create pattern, resetting the
+board for the lessons and handing it back when you switch out. It's a set of
+lessons you can step through or jump between:
 
 The lessons never do the maths *for* you — they're all feel and trial-and-error.
 You build grooves, then **cut the pieces until the lanes line up**, discovering

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pattern Block Drum Machine</title>
   <meta name="description" content="Grab fraction blocks from the wall and slide them into a sampler sequencer. Rotate block faces for dynamics, subdivide beats." />
-  <link rel="stylesheet" href="styles.css?v=18" />
+  <link rel="stylesheet" href="styles.css?v=19" />
 </head>
 <body>
   <div id="app">
@@ -41,7 +41,9 @@
         </div>
       </div>
 
-      <div class="mode-toggle" role="tablist" aria-label="Mode">
+      <a id="backToMain" class="btn back-link" href="index.html" title="Leave the tutorial and go to the plain sampler" hidden>← Sampler</a>
+
+      <div class="mode-toggle" role="tablist" aria-label="Mode" hidden>
         <button id="modeCreate" class="mode-btn active" data-mode="create" title="Free play — build patterns, no restrictions">🎛️ Create</button>
         <button id="modeLearn" class="mode-btn" data-mode="learn" title="Guided tutorial — build grooves and feel how rhythms line up">🎓 Learn</button>
       </div>
@@ -55,7 +57,7 @@
         <button id="load" class="btn" title="Load last save">Load</button>
         <button id="export" class="btn" title="Download pattern as JSON">Export</button>
         <button id="import" class="btn" title="Import a pattern JSON">Import</button>
-        <button id="grooveLabBtn" class="btn" title="Open the Groove Lab (works in any mode)">🎓 Groove Lab</button>
+        <button id="grooveLabBtn" class="btn" title="Open the Groove Lab (works in any mode)" hidden>🎓 Groove Lab</button>
         <button id="help" class="btn btn-ghost" title="How it works">?</button>
       </div>
     </header>
@@ -158,11 +160,11 @@
         <li><strong>Mix</strong> — <em>M</em> mutes a lane, <em>S</em> solos it, the slider sets its level.</li>
         <li><strong>🎵 Tones</strong> — flip <em>Tones</em> on to hear your beat as pitched notes instead of drums;
           lanes are stacked on a scale so hits that land together make chords.</li>
-        <li><strong>🎓 Learn mode</strong> — a guided tutorial: it walks you through building a polyrhythm and then
+        <li class="help-learn" hidden><strong>🎓 Learn mode</strong> — a guided tutorial: it walks you through building a polyrhythm and then
           cutting the pieces until both lanes share a grid, discovering the LCM by ear and eye. In Learn mode a lane
           stays silent until it makes a full bar, and cutting a block mutes the new pieces so the groove is preserved
           while the grid is revealed. <em>Create</em> mode is the free-play sampler with no rules.</li>
-        <li><strong>🎓 Groove Lab</strong> — a popout (button in the toolbar) for any two numbers: their HCF and LCM,
+        <li class="help-learn" hidden><strong>🎓 Groove Lab</strong> — a popout (button in the toolbar) for any two numbers: their HCF and LCM,
           how "funky" their polyrhythm is, played as a rhythm, and heard as a just-intonation interval (7-limit and
           up, so septimal steps like <em>7/6</em> get a real name).</li>
       </ul>
@@ -236,6 +238,6 @@
   <input id="fileInput" type="file" accept="audio/*" hidden />
   <input id="jsonInput" type="file" accept="application/json,.json" hidden />
 
-  <script src="app.js?v=18"></script>
+  <script src="app.js?v=19"></script>
 </body>
 </html>
