@@ -85,6 +85,38 @@ instead of drums. Lanes are stacked on a minor-pentatonic scale, so hits that
 land together turn into chords — a quick way to hear the *harmony* hiding in a
 rhythm.
 
+## 🎼 Score
+
+![The sequencer with the score view underneath it](docs/score.png)
+
+Flip **Score** on (next to Tones) and the same bar appears underneath as sheet
+music — one rhythm staff per lane, redrawn with every edit, so it always matches
+the blocks. It reads like a drummer's part:
+
+- **One block = one note.** A `1/4` is a quarter note, a `1/8` an eighth, a
+  `3/8` a dotted quarter; a length like `5/8` that isn't a single note value is
+  written as tied notes. A block that's been cut into pieces becomes that many
+  notes, beamed by the beat.
+- **Faces are dynamics** — *loud* gets an accent (`>`), *mid* is a plain note,
+  *soft* is a ghost note in parentheses, and *mute* is a rest.
+- **Thirds, fifths, sevenths… are tuplets.** Three `1/12` blocks come out as an
+  eighth-note triplet under a `3` bracket, `1/5` blocks as a quintuplet, `1/9`
+  as `9:8`, and so on — so the grids the polyrhythm lessons make you find show
+  up in standard notation.
+- **Colours match the wall.** Every notehead and rest is filled with its
+  block's colour, and notes sit at the same left-to-right position as the
+  blocks above, with the beat count `1 2 3 4` across the top. The tempo mark
+  follows the slider, and with **Tones** on each staff is labelled with its
+  pitch.
+
+It's a second view of the same pattern, not a picture: hover a note and its
+block lights up (and the other way round), click a note to rotate its face,
+right-click it to subdivide, hover it and use the keyboard shortcuts, or click
+empty staff space with a brush armed to place a block. The playhead sweeps the
+staff while the beat plays and each note flashes as it's hit. **🖨 Print**
+prints just the score, and **⤓ SVG** downloads it as an image. The toggle is
+remembered between visits.
+
 ## 🎓 Learn mode
 
 ![The tutorial and Groove Lab in Learn mode](docs/learn-mode.png)
@@ -176,6 +208,13 @@ the history resets when you switch modes or lessons.
   - **Scheduler** — a look-ahead scheduler (25 ms tick, ~120 ms window) turns
     each lane's tiled blocks into precisely-timed one-shots, with a lane-independent
     gain chain feeding a master bus.
+  - **Score** — worked out from the same exact rationals. A block's reduced
+    denominator splits as `2^k · m` with `m` odd: `m > 1` makes it an `m:q`
+    tuplet (`q` the largest power of two below `m`), and under that ratio the
+    written value is `n / (2^k · q)`, a binary fraction spelled as dotted
+    and tied note values. Beams group within a beat (or a tuplet bracket),
+    rests break them, and everything is drawn as plain SVG — no notation
+    library.
 
 ## Physical version?
 

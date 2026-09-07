@@ -36,11 +36,11 @@ html, body {
 @media (min-width: 1300px) { #app { max-width: min(1680px, 96vw); } }
 
 main { display: flex; flex-direction: column; gap: 14px; }
-.board-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.board-col, .seq-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 @media (min-width: 1300px) {
   main { flex-direction: row; align-items: flex-start; }
   .board-col { flex: 0 0 440px; }
-  .seq-wrap { flex: 1 1 0; min-width: 0; }
+  .seq-col { flex: 1 1 0; min-width: 0; }
 }
 
 /* ---------- Top bar ---------- */
@@ -147,8 +147,42 @@ input[type=range]::-moz-range-thumb {
 }
 #midiToggle.on { background: #2aa257; border-color: #2aa257; color: #06210f; font-weight: 700; }
 #tonesToggle.on { background: linear-gradient(180deg, #7b6cf0, #6152d6); border-color: #6152d6; color: #f4f2ff; font-weight: 700; }
-/* keep the two right-aligned buttons in the sequencer header grouped together */
-.seq-wrap .section-head #addLane { margin-left: 8px; }
+#scoreToggle.on { background: linear-gradient(180deg, #f2d48a, #d9b25a); border-color: #c99d3f; color: #2a1e00; font-weight: 700; }
+/* keep the right-aligned buttons in the sequencer header grouped together */
+.seq-wrap .section-head #scoreToggle, .seq-wrap .section-head #addLane { margin-left: 8px; }
+
+/* ---------- Score (sheet music) ---------- */
+.score-wrap .section-head #scoreSvg { margin-left: 8px; }
+.score {
+  overflow-x: auto; border-radius: 10px; background: #f7f2e7; border: 1px solid #d8cfba;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.55), 0 2px 6px rgba(0,0,0,.35);
+}
+.score svg { display: block; }
+.score-empty { padding: 28px; color: #6d6353; font-size: 12px; text-align: center; }
+.score-note { cursor: pointer; }
+.score-note .glyph { transition: filter .08s; }
+.score-note:hover .glyph, .score-note.linked .glyph { filter: drop-shadow(0 0 3px rgba(232,169,15,.95)) brightness(1.12); }
+.score-note .glyph { transform-box: fill-box; transform-origin: center; }
+.score-note.hit .glyph { animation: scoreHit .3s ease-out; }
+@keyframes scoreHit { 0% { transform: scale(1.35); } 100% { transform: scale(1); } }
+.score-playhead { opacity: 0; transition: opacity .15s; }
+.score.playing .score-playhead { opacity: .9; }
+.block.linked { box-shadow: inset 0 0 0 2px #fff, 0 0 12px rgba(255,255,255,.55); filter: brightness(1.15); }
+.score-legend { margin-top: 8px; font-size: 11px; color: var(--muted); line-height: 1.6; }
+.score-legend b { color: var(--text); font-weight: 600; }
+
+/* printing with the score on prints just the score, on plain paper */
+@media print {
+  body.score-on { background: #fff; }
+  html:has(body.score-on) { background: #fff; }   /* its own rule: an old browser that rejects :has() drops only this line */
+  body.score-on #app > :not(main), body.score-on .board-col, body.score-on .seq-wrap,
+  body.score-on .score-wrap .section-head, body.score-on .score-legend { display: none !important; }
+  body.score-on #app { max-width: none; padding: 0; min-height: 0; }
+  body.score-on main { display: block; }
+  body.score-on .score-wrap { border: none; background: none; padding: 0; }
+  body.score-on .score { overflow: visible; border: none; box-shadow: none; }
+  body.score-on .score svg { width: 100%; height: auto; }
+}
 
 /* ---------- Tutorial panel (Learn mode) ---------- */
 .tut-wrap { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }

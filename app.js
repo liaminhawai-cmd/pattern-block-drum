@@ -459,6 +459,7 @@ function scheduler() {
 function scheduleFlash(ev, t) {
   const delay = Math.max(0, (t - ctx.currentTime) * 1000);
   setTimeout(() => {
+    flashScoreNote(ev.li, ev.bi);
     const laneEl = document.querySelector(`.lane[data-id="${ev.li}"] .track`);
     if (!laneEl) return;
     const el = laneEl.children[ev.bi];
@@ -479,6 +480,7 @@ function play() {
   document.querySelector('.play-label').textContent = 'Stop';
   document.querySelector('.play-glyph').textContent = '■';
   document.getElementById('seq').classList.add('playing');
+  document.getElementById('score').classList.add('playing');
 }
 
 function stop() {
@@ -489,6 +491,7 @@ function stop() {
   document.querySelector('.play-label').textContent = 'Play';
   document.querySelector('.play-glyph').textContent = '▶';
   document.getElementById('seq').classList.remove('playing');
+  document.getElementById('score').classList.remove('playing');
 }
 
 /* playhead animation */
@@ -505,6 +508,10 @@ function tickPlayhead() {
       const sr = seq.getBoundingClientRect();
       ph.style.left = (tr.left - sr.left + phase * tr.width) + 'px';
       ph.style.height = seq.clientHeight + 'px';
+    }
+    if (scoreOn && scoreLayout) {
+      const sp = document.getElementById('scorePlayhead');
+      if (sp) { const x = scoreLayout.noteX0 + phase * scoreLayout.noteW; sp.setAttribute('x1', x); sp.setAttribute('x2', x); }
     }
   }
   requestAnimationFrame(tickPlayhead);
@@ -670,8 +677,11 @@ function renderSeq() {
         }
       });
       blockEl.addEventListener('contextmenu', (e) => { e.preventDefault(); openCtxMenu(e, li, bi); });
-      blockEl.addEventListener('mouseenter', () => { hoverTarget = { li, bi }; });
-      blockEl.addEventListener('mouseleave', () => { if (hoverTarget && hoverTarget.li === li && hoverTarget.bi === bi) hoverTarget = null; });
+      blockEl.addEventListener('mouseenter', () => { hoverTarget = { li, bi }; linkScoreNote(lane.id, bi, true); });
+      blockEl.addEventListener('mouseleave', () => {
+        if (hoverTarget && hoverTarget.li === li && hoverTarget.bi === bi) hoverTarget = null;
+        linkScoreNote(lane.id, bi, false);
+      });
 
       track.appendChild(blockEl);
     });
@@ -733,6 +743,7 @@ function renderSeq() {
   if (!ph) { ph = el('div', 'playhead'); ph.id = 'playhead'; }
   seq.appendChild(ph);
 
+  renderScore();            // the score is the same pattern, so it re-draws with the board
   maybeAdvanceTutorial();   // check the tutorial goal after any pattern change
 }
 
@@ -1350,6 +1361,7 @@ function toggleTones() {
   const btn = $('#tonesToggle');
   btn.classList.toggle('on', state.tones);
   btn.textContent = state.tones ? '🎵 Tones: on' : '🎵 Tones';
+  renderScore();   // staff labels show each lane's pitch while Tones is on
 }
 
 /* ------------------------------ tutorial (Learn mode) ------------------- */
@@ -1752,6 +1764,398 @@ function labUseLanes() {
   updateLab();
 }
 
+/* ------------------------------ score (sheet music) -------------------- */
+// A second view of the very same lanes, drawn as standard notation: one
+// single-line percussion staff per lane, laid out time-proportionally so every
+// note sits at the same left-to-right spot as its block. One block is one
+// note — or one rest when its face is mute — and the faces become drum
+// dynamics: loud = accent, mid = plain, soft = ghost note in parentheses.
+// Fractions that aren't powers of two (thirds, fifths, …) come out as tuplets,
+// and a block whose length isn't a single note value is written as tied
+// notes. It's all hand-drawn SVG — no notation library, no dependencies — and
+// it's live: hover a note to light up its block, click to rotate its face,
+// right-click to cut it, and the playhead sweeps the staff as the beat plays.
+const SCORE_KEY = 'pbdm.score.v1';
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const INK = '#221d18', PAPER = '#f7f2e7', INK_SOFT = '#8a7f6c';
+const SERIF = "Georgia, 'Times New Roman', serif";
+const SANS = "'Segoe UI', system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif";
+// layout, in px: left padding, lane-name column, row pitch, staff line within
+// a row, header height, stem length, gap between beams, and the tightest
+// note spacing allowed before the bar widens (and the panel scrolls).
+const SC = { padL: 10, nameW: 86, rowH: 80, line: 54, top: 28, stem: 30, beamGap: 5.5, minGap: 18 };
+const NOTE_NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+let scoreOn = false;
+let scoreLayout = null;    // { noteX0, noteW } of the last render — the playhead needs them
+
+// The pitch a lane plays in Tones mode, as a note name (lane 0 = C3).
+function laneToneName(li) {
+  const midi = 48 + TONE_DEGREES[li % TONE_DEGREES.length] + 12 * Math.floor(li / TONE_DEGREES.length);
+  return NOTE_NAMES[midi % 12] + (Math.floor(midi / 12) - 1);
+}
+
+// d = 2^k · m with m odd. m > 1 is what makes a block a tuplet.
+function oddPart(d) { let m = d; while (m % 2 === 0) m /= 2; return m; }
+function pow2Below(m) { let q = 1; while (q * 2 <= m) q *= 2; return q; }
+function log2Int(d) { let j = 0; while (d > 1) { d /= 2; j++; } return j; }
+
+// Turn a block of n/d of the bar into notation. The tuplet ratio is m:q — m
+// notes in the time of q, q being the largest power of two under m (3:2, 5:4,
+// 7:4, 9:8 …) — and under that ratio the written value is n / (2^k · q): a
+// binary fraction, so it can be spelled as ordinary note values, dotted where
+// the remainder allows and tied together when it takes more than one.
+function notate(n, d) {
+  const r = reduce(n, d);
+  const m = oddPart(r.d);
+  const q = m === 1 ? 1 : pow2Below(m);
+  const w = reduce(r.n, (r.d / m) * q);          // written value; w.d is a power of two
+  const pieces = [];
+  let rem = w.n;                                   // still to spell, in units of 1/w.d
+  while (rem > 0) {
+    let p = 1; while (p * 2 <= rem) p *= 2;        // largest plain note value that fits
+    let val = p, half = p / 2, dots = 0;
+    while (dots < 2 && half >= 1 && rem - val >= half) { val += half; half /= 2; dots++; }
+    pieces.push({ base: reduce(p, w.d), dots, written: reduce(val, w.d) });
+    rem -= val;
+  }
+  return { m, q, pieces };
+}
+
+// What a plain note value 1/2^j looks like on the page.
+function noteKind(base) {
+  const j = log2Int(base.d);
+  return { j, whole: j === 0, hollow: j <= 1, stem: j >= 1, flags: Math.max(0, j - 2) };
+}
+
+// Everything the renderer needs for one lane: each block as an event with its
+// notated pieces at exact positions, plus tuplet brackets and beam groups.
+function laneScoreModel(lane) {
+  const events = [];
+  let pos = { n: 0, d: 1 };
+  lane.blocks.forEach((b, bi) => {
+    if (pos.n >= pos.d) return;                       // past the end of the bar — never sounds
+    const dur = reduce(b.n, b.d);
+    const nt = notate(dur.n, dur.d);
+    let pt = pos;
+    const pieces = nt.pieces.map((p) => {
+      const actual = reduce(p.written.n * nt.q, p.written.d * nt.m);   // real length once the tuplet squeezes it
+      const piece = { base: p.base, dots: p.dots, actual, t: pt, kind: noteKind(p.base), beam: null, x: 0 };
+      pt = addFrac(pt, actual);
+      return piece;
+    });
+    events.push({ bi, block: b, t: pos, dur, m: nt.m, q: nt.q, pieces, sounding: b.face !== 'mute', bracket: -1 });
+    pos = addFrac(pos, dur);
+  });
+
+  // Tuplet brackets: neighbours with the same odd part share one, closed once
+  // it spans the natural length for the first block's size (three triplet
+  // eighths = one beat, three triplet quarters = half a bar …) so uniform runs
+  // get the familiar per-beat brackets. A leftover run still gets a bracket —
+  // every block in it carries the same m:q, so the bracket is always valid.
+  const brackets = [];
+  for (let i = 0; i < events.length;) {
+    const m = events[i].m;
+    if (m === 1) { i++; continue; }
+    const span = { n: 1, d: events[i].dur.d / m };    // 1 / 2^k
+    const members = [];
+    let acc = { n: 0, d: 1 }, j = i;
+    while (j < events.length && events[j].m === m) {
+      members.push(events[j]); acc = addFrac(acc, events[j].dur); j++;
+      if (acc.n * span.d >= span.n * acc.d) break;
+    }
+    members.forEach((ev) => { ev.bracket = brackets.length; });
+    brackets.push({ m, q: events[i].q, members });
+    i = j;
+  }
+
+  // Beams: flagged notes (eighths and shorter) beam together while they stay
+  // inside one beat — or inside one tuplet bracket — and a rest breaks them.
+  const groups = [];
+  let cur = null;
+  for (const ev of events) for (const p of ev.pieces) {
+    if (!ev.sounding || p.kind.flags < 1) { cur = null; continue; }
+    const key = ev.bracket >= 0 ? 'b' + ev.bracket : 'q' + Math.floor((4 * p.t.n) / p.t.d);
+    if (cur && cur.key === key) cur.items.push(p);
+    else { cur = { key, items: [p] }; groups.push(cur); }
+  }
+  const beams = groups.filter((g) => g.items.length > 1);   // a lone eighth keeps its flag
+  for (const g of beams) g.items.forEach((p) => { p.beam = g; });
+  return { events, brackets, beams };
+}
+
+/* drawing primitives ----------------------------------------------------- */
+function svgEl(tag, attrs, parent) {
+  const e = document.createElementNS(SVG_NS, tag);
+  for (const k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function svgText(parent, x, y, str, attrs) {
+  const t = svgEl('text', Object.assign({ x, y }, attrs), parent);
+  t.textContent = str;
+  return t;
+}
+function flagPath(sx, sy) {
+  return `M ${sx} ${sy} C ${sx + .6} ${sy + 4.6}, ${sx + 7.6} ${sy + 6.4}, ${sx + 6.4} ${sy + 15.6}`
+    + ` C ${sx + 7.2} ${sy + 9.6}, ${sx + 3.6} ${sy + 7.6}, ${sx} ${sy + 6.4} Z`;
+}
+// The head lives in its own transform-free group: the hover glow and the
+// hit pulse are CSS transforms on that group, so they can't collide with the
+// rotate() attribute that tilts the ellipse itself.
+function drawNotehead(g, x, y, kind, colour) {
+  const w = svgEl('g', { class: 'glyph' }, g);
+  if (kind.whole) {
+    svgEl('ellipse', { cx: x, cy: y, rx: 6.2, ry: 3.9, transform: `rotate(-8 ${x} ${y})`, fill: colour, stroke: INK, 'stroke-width': .7 }, w);
+    svgEl('ellipse', { cx: x, cy: y, rx: 2.4, ry: 2.2, transform: `rotate(55 ${x} ${y})`, fill: PAPER }, w);
+  } else {
+    svgEl('ellipse', { cx: x, cy: y, rx: 5.3, ry: 3.6, transform: `rotate(-22 ${x} ${y})`, fill: colour, stroke: INK, 'stroke-width': .7 }, w);
+    if (kind.hollow) svgEl('ellipse', { cx: x, cy: y, rx: 3.1, ry: 1.5, transform: `rotate(-38 ${x} ${y})`, fill: PAPER }, w);
+  }
+}
+function drawDots(g, x, y, dots) {
+  for (let k = 0; k < dots; k++) svgEl('circle', { cx: x + 9.5 + 4.5 * k, cy: y - 3.5, r: 1.7, fill: INK }, g);
+}
+// A sounding piece: stem, head, flags (unless beamed), dots — and on the first
+// piece of a block, its dynamic: an accent for loud, parentheses for soft.
+function drawNote(g, x, y, beamY, piece, colour, face, first) {
+  const kind = piece.kind, sx = x + 4.8;
+  if (kind.stem) svgEl('line', { x1: sx, y1: y - 1, x2: sx, y2: beamY, stroke: INK, 'stroke-width': 1.4 }, g);
+  drawNotehead(g, x, y, kind, colour);
+  if (kind.flags && !piece.beam) for (let i = 0; i < kind.flags; i++) svgEl('path', { d: flagPath(sx, beamY + i * 6), fill: INK }, g);
+  drawDots(g, x, y, piece.dots);
+  if (!first) return;
+  if (face === 'loud') {
+    svgEl('path', { d: `M ${x - 4} ${beamY - 13.5} L ${x + 4.5} ${beamY - 10} L ${x - 4} ${beamY - 6.5}`,
+      fill: 'none', stroke: INK, 'stroke-width': 1.5, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, g);
+  } else if (face === 'soft') {
+    svgEl('path', { d: `M ${x - 7.5} ${y - 6.5} Q ${x - 11.5} ${y}, ${x - 7.5} ${y + 6.5} M ${x + 7.5} ${y - 6.5} Q ${x + 11.5} ${y}, ${x + 7.5} ${y + 6.5}`,
+      fill: 'none', stroke: INK, 'stroke-width': 1.1 }, g);
+  }
+}
+// A rest of the same written value, in the block's colour.
+function drawRest(g, x, y, piece, colour) {
+  const { j } = piece.kind;
+  if (j === 0) {          // whole rest hangs from the line
+    svgEl('rect', { class: 'glyph', x: x - 5.5, y, width: 11, height: 4.2, fill: colour, stroke: INK, 'stroke-width': .5 }, g);
+  } else if (j === 1) {   // half rest sits on it
+    svgEl('rect', { class: 'glyph', x: x - 5.5, y: y - 4.2, width: 11, height: 4.2, fill: colour, stroke: INK, 'stroke-width': .5 }, g);
+  } else if (j === 2) {   // quarter rest
+    svgEl('path', { class: 'glyph', d: `M ${x - 2.5} ${y - 8} L ${x + 2.5} ${y - 2.5} L ${x - 1.5} ${y + 1.5} L ${x + 2.5} ${y + 6} C ${x} ${y + 4.5}, ${x - 2.5} ${y + 6}, ${x - 1} ${y + 9}`,
+      fill: 'none', stroke: colour, 'stroke-width': 2.4, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, g);
+  } else {                // eighth and shorter: a slanted stem with one hook per flag
+    const f = j - 2, top = y - 3.6, H = 11.6 + 4.4 * (f - 1), slope = -0.414;
+    const gg = svgEl('g', { class: 'glyph' }, g);
+    svgEl('line', { x1: x + 2.2, y1: top, x2: x + 2.2 + slope * H, y2: top + H, stroke: colour, 'stroke-width': 1.5, 'stroke-linecap': 'round' }, gg);
+    for (let i = 0; i < f; i++) {
+      const yi = y - 3.2 + 4.4 * i, xs = x + 2.2 + slope * (yi - top);
+      svgEl('circle', { cx: xs - 4.6, cy: yi, r: 2.1, fill: colour }, gg);
+      svgEl('path', { d: `M ${xs - 4.6} ${yi} Q ${xs - 2.3} ${yi + 2.4}, ${xs} ${yi}`, fill: 'none', stroke: colour, 'stroke-width': 1.4 }, gg);
+    }
+  }
+  drawDots(g, x, y, piece.dots);
+}
+function drawTie(g, x1, x2, y) {
+  svgEl('path', { d: `M ${x1 + 4} ${y + 5} Q ${(x1 + x2) / 2} ${y + 14}, ${x2 - 4} ${y + 5}`, fill: 'none', stroke: INK, 'stroke-width': 1.4 }, g);
+}
+// Horizontal beams (every head sits on the one line, so stems are all the
+// same height). Level 0 is the eighth beam, level 1 the sixteenth beam, …;
+// a level that doesn't continue to a neighbour becomes a short stub.
+function drawBeams(g, group, beamY) {
+  const items = group.items;
+  const sx = items.map((p) => p.x + 4.8), flags = items.map((p) => p.kind.flags);
+  const maxF = Math.max(...flags);
+  for (let L = 0; L < maxF; L++) {
+    const y = beamY + L * SC.beamGap;
+    for (let i = 0; i < items.length - 1; i++) {
+      if (Math.min(flags[i], flags[i + 1]) > L) svgEl('line', { x1: sx[i] - .7, y1: y, x2: sx[i + 1] + .7, y2: y, stroke: INK, 'stroke-width': 3.4 }, g);
+    }
+    for (let i = 0; i < items.length; i++) {
+      if (flags[i] <= L) continue;
+      const left = i > 0 && Math.min(flags[i - 1], flags[i]) > L;
+      const right = i < items.length - 1 && Math.min(flags[i], flags[i + 1]) > L;
+      if (left || right) continue;
+      const dir = i === 0 ? 1 : -1;
+      svgEl('line', { x1: sx[i] - .7 * dir, y1: y, x2: sx[i] + dir * 7, y2: y, stroke: INK, 'stroke-width': 3.4 }, g);
+    }
+  }
+}
+function drawTuplet(g, br, beamY) {
+  const firstEv = br.members[0], lastEv = br.members[br.members.length - 1];
+  const xs = firstEv.pieces[0].x - 5, xe = lastEv.pieces[lastEv.pieces.length - 1].x + 11, y = beamY - 21;
+  const label = br.m <= 7 ? String(br.m) : `${br.m}:${br.q}`;   // 3, 5, 7 are read at a glance; spell out 9:8, 15:8 …
+  const xm = (xs + xe) / 2, gap = label.length * 3 + 4;
+  const line = { fill: 'none', stroke: INK, 'stroke-width': 1.1 };
+  svgEl('path', Object.assign({ d: `M ${xs} ${y + 5} L ${xs} ${y} L ${Math.max(xs, xm - gap)} ${y}` }, line), g);
+  svgEl('path', Object.assign({ d: `M ${Math.min(xe, xm + gap)} ${y} L ${xe} ${y} L ${xe} ${y + 5}` }, line), g);
+  svgText(g, xm, y + 3.6, label, { 'text-anchor': 'middle', 'font-family': SERIF, 'font-size': 10, 'font-style': 'italic', 'font-weight': 700, fill: INK });
+}
+
+/* the page ---------------------------------------------------------------- */
+function renderScore() {
+  const host = document.getElementById('score');
+  if (!host || !scoreOn) return;
+  host.innerHTML = '';
+  scoreLayout = null;
+  const lanes = state.lanes;
+  if (!lanes.length) { host.appendChild(el('div', 'score-empty', 'Add a lane to see a score.')); return; }
+  const models = lanes.map(laneScoreModel);
+  const solo = anySolo();
+
+  // geometry: name column | system bracket | ‖: | clef | 4/4 | the bar … :‖
+  const sysX = SC.padL + SC.nameW + 6;
+  const barStart = sysX + 5, clefX = barStart + 18, timeX = clefX + 17, noteX0 = timeX + 22;
+  let minDur = 1;
+  for (const mdl of models) for (const ev of mdl.events) for (const p of ev.pieces) minDur = Math.min(minDur, fval(p.actual));
+  const tail = 8 + 3 + SC.padL;
+  const avail = host.clientWidth - noteX0 - tail;
+  const noteW = Math.min(6000, Math.max(avail, 240, Math.ceil(SC.minGap / minDur)));
+  const barEnd = noteX0 + noteW + 8;
+  const W = barEnd + 3 + SC.padL, H = SC.top + lanes.length * SC.rowH + 4;
+  const lineY = (i) => SC.top + i * SC.rowH + SC.line;
+  const xOf = (t) => noteX0 + fval(t) * noteW;
+  const y0 = lineY(0) - 10, y1 = lineY(lanes.length - 1) + 10;    // the system barlines' extent
+
+  const root = svgEl('svg', { xmlns: SVG_NS, width: W, height: H, viewBox: `0 0 ${W} ${H}`, 'font-family': SANS }, host);
+  svgEl('rect', { x: 0, y: 0, width: W, height: H, fill: PAPER }, root);
+
+  // tempo mark (a little quarter note) and the beat count across the top
+  const tx = SC.padL + 4, ty = SC.top - 12;
+  svgEl('ellipse', { cx: tx, cy: ty, rx: 3, ry: 2.1, transform: `rotate(-22 ${tx} ${ty})`, fill: INK }, root);
+  svgEl('line', { x1: tx + 2.7, y1: ty - .5, x2: tx + 2.7, y2: ty - 11, stroke: INK, 'stroke-width': 1.2 }, root);
+  svgText(root, tx + 8, ty + 3.5, `= ${state.bpm}`, { id: 'scoreTempo', 'font-size': 10.5, 'font-style': 'italic', fill: INK });
+  for (let b = 0; b < 4; b++) {
+    const x = xOf({ n: b, d: 4 });
+    svgText(root, x, SC.top - 9, String(b + 1), { 'text-anchor': 'middle', 'font-size': 9, fill: INK_SOFT });
+    if (b) svgEl('line', { x1: x, y1: y0, x2: x, y2: y1, stroke: '#c9bea6', 'stroke-width': 1, 'stroke-dasharray': '2 3' }, root);
+  }
+
+  // system bracket and the repeat barlines (the bar loops) through every staff
+  svgEl('rect', { x: sysX - 3, y: y0 - 2, width: 3, height: y1 - y0 + 4, fill: INK }, root);
+  svgEl('path', { d: `M ${sysX - 3} ${y0 - 2} Q ${sysX + 1} ${y0 - 3}, ${sysX + 4} ${y0 - 7} M ${sysX - 3} ${y1 + 2} Q ${sysX + 1} ${y1 + 3}, ${sysX + 4} ${y1 + 7}`,
+    fill: 'none', stroke: INK, 'stroke-width': 1.6 }, root);
+  svgEl('rect', { x: barStart - 1.5, y: y0, width: 3, height: y1 - y0, fill: INK }, root);
+  svgEl('line', { x1: barStart + 5, y1: y0, x2: barStart + 5, y2: y1, stroke: INK, 'stroke-width': 1.1 }, root);
+  svgEl('line', { x1: barEnd - 4.5, y1: y0, x2: barEnd - 4.5, y2: y1, stroke: INK, 'stroke-width': 1.1 }, root);
+  svgEl('rect', { x: barEnd - 1.5, y: y0, width: 3, height: y1 - y0, fill: INK }, root);
+
+  lanes.forEach((lane, li) => {
+    const mdl = models[li];
+    const ly = lineY(li), beamY = ly - SC.stem, rowTop = SC.top + li * SC.rowH;
+    const dim = lane.muted || (solo && !lane.solo);
+    const gated = state.mode === 'learn' && lane.blocks.length && !laneComplete(lane);
+    const staff = svgEl('g', { class: 'staff', opacity: dim ? .3 : (gated ? .5 : 1) }, root);
+
+    // empty staff space accepts the armed brush, like clicking a track
+    const hit = svgEl('rect', { class: 'staff-hit', x: noteX0 - 14, y: rowTop, width: noteW + 28, height: SC.rowH, fill: 'none', 'pointer-events': 'all' }, staff);
+    hit.addEventListener('click', (e) => {
+      if (!armed) return;
+      const t = (e.clientX - root.getBoundingClientRect().left - noteX0) / noteW;
+      let idx = 0, pos = 0;
+      for (const b of lane.blocks) { const v = fval(b); if (t < pos + v / 2) break; pos += v; idx++; }
+      if (!insertBlock(li, idx, blk(armed.n, armed.d, 'loud'))) toast('No room left in the bar');
+    });
+
+    const name = lane.name.length > 13 ? lane.name.slice(0, 12) + '…' : lane.name;
+    svgText(staff, SC.padL + 2, ly + 4, name, { 'font-size': 11, 'font-weight': 700, fill: INK });
+    if (state.tones) svgText(staff, SC.padL + 2, ly + 16, laneToneName(li), { 'font-size': 9, fill: INK_SOFT });
+    svgEl('line', { x1: sysX, y1: ly, x2: barEnd + 1.5, y2: ly, stroke: INK, 'stroke-width': 1.1 }, staff);
+    // percussion clef, 4/4, and the repeat dots
+    svgEl('rect', { x: clefX, y: ly - 7, width: 3, height: 14, fill: INK }, staff);
+    svgEl('rect', { x: clefX + 5, y: ly - 7, width: 3, height: 14, fill: INK }, staff);
+    const sig = { 'text-anchor': 'middle', 'font-family': SERIF, 'font-size': 11.5, 'font-weight': 700, fill: INK };
+    svgText(staff, timeX, ly - 1.5, '4', sig);
+    svgText(staff, timeX, ly + 10.5, '4', sig);
+    for (const dx of [barStart + 10, barEnd - 10]) for (const dy of [-4.5, 4.5]) svgEl('circle', { cx: dx, cy: ly + dy, r: 1.7, fill: INK }, staff);
+
+    for (const ev of mdl.events) {
+      const colour = denColor(ev.dur.d);   // the block's own colour, same as on the wall
+      const g = svgEl('g', { class: 'score-note', 'data-li': lane.id, 'data-bi': ev.bi }, staff);
+      svgEl('title', {}, g).textContent = `${fracLabel(ev.block)} · ${ev.block.face} — click to rotate face, right-click to subdivide`;
+      // an invisible hit area over the block's whole time span, so the note is
+      // as easy to hover and click as its block (SVG only hit-tests painted ink)
+      const hx0 = xOf(ev.t) - 7, hx1 = xOf(addFrac(ev.t, ev.dur)) - 7;
+      svgEl('rect', { class: 'note-hit', x: hx0, y: rowTop + 2, width: Math.max(14, hx1 - hx0), height: SC.rowH - 4, fill: 'none', 'pointer-events': 'all' }, g);
+      ev.pieces.forEach((p, pi) => {
+        p.x = xOf(p.t);
+        if (!ev.sounding) { drawRest(g, p.x, ly, p, colour); return; }
+        drawNote(g, p.x, ly, beamY, p, colour, ev.block.face, pi === 0);
+        if (pi > 0) drawTie(g, ev.pieces[pi - 1].x, p.x, ly);
+      });
+      g.addEventListener('click', () => { rotateFace(lane, ev.bi); setArmed(ev.dur.n, ev.dur.d); });
+      g.addEventListener('contextmenu', (e) => { e.preventDefault(); openCtxMenu(e, li, ev.bi); });
+      g.addEventListener('mouseenter', () => { hoverTarget = { li, bi: ev.bi }; linkBlock(lane.id, ev.bi, true); });
+      g.addEventListener('mouseleave', () => {
+        if (hoverTarget && hoverTarget.li === li && hoverTarget.bi === ev.bi) hoverTarget = null;
+        linkBlock(lane.id, ev.bi, false);
+      });
+    }
+    for (const grp of mdl.beams) drawBeams(staff, grp, beamY);
+    for (const br of mdl.brackets) drawTuplet(staff, br, beamY);
+  });
+
+  svgEl('line', { id: 'scorePlayhead', class: 'score-playhead', x1: noteX0, y1: y0 - 14, x2: noteX0, y2: y1 + 6,
+    stroke: '#e0493b', 'stroke-width': 2, 'stroke-linecap': 'round' }, root);
+  scoreLayout = { noteX0, noteW };
+}
+
+// Cross-highlighting: a block and its note light up together.
+function linkScoreNote(laneId, bi, on) {
+  if (!scoreOn) return;
+  const n = document.querySelector(`.score-note[data-li="${laneId}"][data-bi="${bi}"]`);
+  if (n) n.classList.toggle('linked', on);
+}
+function linkBlock(laneId, bi, on) {
+  const b = document.querySelector(`.lane[data-id="${laneId}"] .track .block[data-bi="${bi}"]`);
+  if (b) b.classList.toggle('linked', on);
+}
+function flashScoreNote(laneId, bi) {
+  if (!scoreOn) return;
+  const n = document.querySelector(`.score-note[data-li="${laneId}"][data-bi="${bi}"]`);
+  if (!n) return;
+  n.classList.remove('hit'); n.getBoundingClientRect(); n.classList.add('hit');
+}
+function updateScoreTempo() {
+  const t = document.getElementById('scoreTempo');
+  if (t) t.textContent = `= ${state.bpm}`;
+}
+
+function setScore(on) {
+  scoreOn = on;
+  const btn = $('#scoreToggle');
+  btn.classList.toggle('on', on);
+  btn.textContent = on ? '🎼 Score: on' : '🎼 Score';
+  $('#scorePanel').hidden = !on;
+  document.body.classList.toggle('score-on', on);   // print styles key off this
+  try { localStorage.setItem(SCORE_KEY, on ? '1' : '0'); } catch (_) { /* private mode etc. */ }
+  if (on) renderScore();
+}
+function toggleScore() { setScore(!scoreOn); }
+
+// The SVG stands on its own (colours and fonts are attributes, not CSS), so
+// exporting is just serialising it without the live-only bits.
+function exportScoreSVG() {
+  const svg = document.querySelector('#score svg');
+  if (!svg) { toast('Nothing to export yet'); return; }
+  const clone = svg.cloneNode(true);
+  clone.querySelectorAll('#scorePlayhead, .staff-hit, .note-hit, title').forEach((n) => n.remove());
+  const src = '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(clone);
+  const blob = new Blob([src], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'pattern-block-score.svg'; a.click();
+  URL.revokeObjectURL(url);
+}
+function printScore() {
+  if (!scoreOn) setScore(true);
+  window.print();
+}
+
+let scoreResizeRaf = 0;
+window.addEventListener('resize', () => {
+  if (!scoreOn) return;
+  cancelAnimationFrame(scoreResizeRaf);
+  scoreResizeRaf = requestAnimationFrame(renderScore);
+});
+
 /* ------------------------------ controls ------------------------------- */
 function syncControls() {
   $('#bpm').value = state.bpm; $('#bpmOut').textContent = state.bpm;
@@ -1760,7 +2164,7 @@ function syncControls() {
 
 function wireControls() {
   $('#play').addEventListener('click', () => (state.playing ? stop() : play()));
-  $('#bpm').addEventListener('input', (e) => { state.bpm = +e.target.value; $('#bpmOut').textContent = state.bpm; markDirty(); });
+  $('#bpm').addEventListener('input', (e) => { state.bpm = +e.target.value; $('#bpmOut').textContent = state.bpm; markDirty(); updateScoreTempo(); });
   $('#master').addEventListener('input', (e) => { state.master = +e.target.value; if (masterNode) masterNode.gain.setTargetAtTime(state.master, ctx.currentTime, 0.01); });
   $('#addLane').addEventListener('click', addLane);
   $('#randomize').addEventListener('click', randomize);
@@ -1781,6 +2185,9 @@ function wireControls() {
   $('#modeCreate').addEventListener('click', () => setMode('create'));
   $('#modeLearn').addEventListener('click', () => setMode('learn'));
   $('#tonesToggle').addEventListener('click', toggleTones);
+  $('#scoreToggle').addEventListener('click', toggleScore);
+  $('#scorePrint').addEventListener('click', printScore);
+  $('#scoreSvg').addEventListener('click', exportScoreSVG);
   $('#tutPrev').addEventListener('click', tutorialPrev);
   $('#tutNext').addEventListener('click', tutorialNext);
   $('#tutLesson').addEventListener('change', (e) => enterLesson(+e.target.value));
@@ -1849,6 +2256,7 @@ function init() {
   wireControls();
   renderTutorial();
   refreshMidiUI();
+  try { if (localStorage.getItem(SCORE_KEY) === '1') setScore(true); } catch (_) { /* storage unavailable */ }
 
   // The plain sampler (index.html, no query) shows no trace of Learn mode —
   // no toggle, no Groove Lab, no mention in Help. Arriving via ?mode=learn

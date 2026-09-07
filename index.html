@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pattern Block Drum Machine</title>
   <meta name="description" content="Grab fraction blocks from the wall and slide them into a sampler sequencer. Rotate block faces for dynamics, subdivide beats." />
-  <link rel="stylesheet" href="styles.css?v=19" />
+  <link rel="stylesheet" href="styles.css?v=20" />
 </head>
 <body>
   <div id="app">
@@ -94,15 +94,33 @@
         </section>
       </div>
 
-      <section class="panel seq-wrap">
-        <div class="section-head">
-          <span class="section-title">Sequencer</span>
-          <span id="seqSub" class="section-sub">one bar per lane — blocks tile left to right, a muted block is a rest</span>
-          <button id="tonesToggle" class="btn btn-sm" title="Play the beat as pitched notes instead of drums">🎵 Tones</button>
-          <button id="addLane" class="btn btn-sm" title="Add an instrument lane">+ Lane</button>
-        </div>
-        <div id="seq" class="seq" aria-label="Sequencer lanes"></div>
-      </section>
+      <div class="seq-col">
+        <section class="panel seq-wrap">
+          <div class="section-head">
+            <span class="section-title">Sequencer</span>
+            <span id="seqSub" class="section-sub">one bar per lane — blocks tile left to right, a muted block is a rest</span>
+            <button id="tonesToggle" class="btn btn-sm" title="Play the beat as pitched notes instead of drums">🎵 Tones</button>
+            <button id="scoreToggle" class="btn btn-sm" title="Show the bar as sheet music — a rhythm staff per lane that follows every edit">🎼 Score</button>
+            <button id="addLane" class="btn btn-sm" title="Add an instrument lane">+ Lane</button>
+          </div>
+          <div id="seq" class="seq" aria-label="Sequencer lanes"></div>
+        </section>
+
+        <section class="panel score-wrap" id="scorePanel" hidden>
+          <div class="section-head">
+            <span class="section-title">🎼 Score</span>
+            <span class="section-sub">the same bar as sheet music — a rhythm staff per lane, notes coloured like their blocks</span>
+            <button id="scorePrint" class="btn btn-sm" title="Print just the score">🖨 Print</button>
+            <button id="scoreSvg" class="btn btn-sm" title="Download the score as an SVG image">⤓ SVG</button>
+          </div>
+          <div id="score" class="score" aria-label="Score"></div>
+          <div class="score-legend">
+            <b>loud</b> = accent (&gt;) · <b>mid</b> = plain note · <b>soft</b> = ghost note in ( ) · <b>mute</b> = rest ·
+            a numbered bracket is a tuplet (3 = triplet, 5 = quintuplet…) · tied notes are one block ·
+            hover a note to find its block, click to rotate its face, right-click to subdivide
+          </div>
+        </section>
+      </div>
     </main>
 
     <footer class="legend">
@@ -160,6 +178,11 @@
         <li><strong>Mix</strong> — <em>M</em> mutes a lane, <em>S</em> solos it, the slider sets its level.</li>
         <li><strong>🎵 Tones</strong> — flip <em>Tones</em> on to hear your beat as pitched notes instead of drums;
           lanes are stacked on a scale so hits that land together make chords.</li>
+        <li><strong>🎼 Score</strong> — flip <em>Score</em> on to see the bar as sheet music, one rhythm staff per
+          lane, redrawn with every edit. One block is one note (a muted block is a rest), <em>loud</em> gets an accent,
+          <em>soft</em> is a ghost note, thirds and fifths come out as tuplets, and every note is coloured like its
+          block. It's live: hover a note to find its block, click it to rotate the face, right-click to subdivide.
+          <em>Print</em> and <em>SVG</em> take it out of the browser.</li>
         <li class="help-learn" hidden><strong>🎓 Learn mode</strong> — a guided tutorial: it walks you through building a polyrhythm and then
           cutting the pieces until both lanes share a grid, discovering the LCM by ear and eye. In Learn mode a lane
           stays silent until it makes a full bar, and cutting a block mutes the new pieces so the groove is preserved
@@ -238,6 +261,6 @@
   <input id="fileInput" type="file" accept="audio/*" hidden />
   <input id="jsonInput" type="file" accept="application/json,.json" hidden />
 
-  <script src="app.js?v=19"></script>
+  <script src="app.js?v=20"></script>
 </body>
 </html>
