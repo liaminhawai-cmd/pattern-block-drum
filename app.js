@@ -1848,10 +1848,12 @@ function laneScoreModel(lane) {
   });
 
   // Tuplet brackets: neighbours with the same odd part share one, closed once
-  // it spans the natural length for the first block's size (three triplet
-  // eighths = one beat, three triplet quarters = half a bar …) so uniform runs
-  // get the familiar per-beat brackets. A leftover run still gets a bracket —
-  // every block in it carries the same m:q, so the bracket is always valid.
+  // it spans a whole multiple of the natural length for the first block's
+  // size (three triplet eighths = one beat, three triplet quarters = half a
+  // bar …) so uniform runs get the familiar per-beat brackets, while merged
+  // pieces like 5/12 + 7/12 stay under one bracket instead of one each. A
+  // leftover run still gets a bracket — every block in it carries the same
+  // m:q, so the bracket is always valid.
   const brackets = [];
   for (let i = 0; i < events.length;) {
     const m = events[i].m;
@@ -1861,7 +1863,7 @@ function laneScoreModel(lane) {
     let acc = { n: 0, d: 1 }, j = i;
     while (j < events.length && events[j].m === m) {
       members.push(events[j]); acc = addFrac(acc, events[j].dur); j++;
-      if (acc.n * span.d >= span.n * acc.d) break;
+      if ((acc.n * span.d) % (span.n * acc.d) === 0) break;   // acc is a whole number of spans
     }
     members.forEach((ev) => { ev.bracket = brackets.length; });
     brackets.push({ m, q: events[i].q, members });
